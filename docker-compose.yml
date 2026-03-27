@@ -1,0 +1,27 @@
+services:
+  # SERVICIO 1: Nuestro Backend FastAPI
+  api:
+    build: .
+    container_name: kitchy_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+
+  # SERVICIO 2: Base de Datos PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: kitchy_db
+    restart: always
+    # Leemos las variables directamente del archivo .env
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
