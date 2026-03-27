@@ -14,11 +14,32 @@ async def lifespan(app: FastAPI):
     yield
     # Al apagar: aquí podríamos cerrar conexiones, etc. (vacío por ahora)
 
-# Inicializamos la aplicación FastAPI con el lifespan
+tags_metadata = [
+    {
+        "name": "Autenticación",
+        "description": "Operaciones de inicio de sesión y registro. La lógica de JWT se maneja aquí.",
+    },
+    {
+        "name": "Usuarios",
+        "description": "Operaciones para leer y gestionar la información del usuario logueado.",
+    },
+]
+
+# Inicializamos la aplicación FastAPI con metadatos
 app = FastAPI(
     title="Kitchy API",
-    description="Backend para la App Gastronómica",
+    description="""
+    Bienvenido a la API oficial de Kitchy. 
+
+    Esta API alimenta la plataforma para microemprendedores gastronómicos, 
+    permitiendo control de autenticación, multi-tenancy y futuros módulos de inventario.
+    """,
     version="1.0.0",
+    contact={
+        "name": "Equipo de Desarrollo Kitchy (Los Resolvedores)",
+        "email": "soporte@kitchy.com",
+    },
+    openapi_tags=tags_metadata,
     lifespan=lifespan
 )
 
