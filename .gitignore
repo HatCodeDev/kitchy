@@ -1,0 +1,19 @@
+# Entornos virtuales
+venv/
+env/
+.venv/
+
+# Archivos de Python compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Variables de entorno y secretos (¡Seguridad vital!)
+.env
+
+# Base de datos local
+*.sqlite3
+*.db
+
+# Archivos de PyCharm (IDE)
+.idea/
