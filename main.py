@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-
+from app.core.config import settings
 # Importamos la función para crear tablas y nuestro router
 from app.core.database import create_tables
 from app.routers import auth, users
@@ -43,10 +43,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS (Configuración de Seguridad para Flutter)
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_ORIGINS, 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
