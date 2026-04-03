@@ -1,5 +1,4 @@
 services:
-  # SERVICIO 1: Nuestro Backend FastAPI
   api:
     build: .
     container_name: kitchy_api
@@ -8,20 +7,24 @@ services:
     volumes:
       - .:/app
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
-  # SERVICIO 2: Base de Datos PostgreSQL
   db:
     image: postgres:15-alpine
     container_name: kitchy_db
     restart: always
-    # Leemos las variables directamente del archivo .env
     env_file:
       - .env
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
