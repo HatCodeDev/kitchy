@@ -31,8 +31,11 @@ async def create_tables():
     Crea las tablas en PostgreSQL basándose en los modelos de SQLAlchemy.
     En producción, usaríamos Alembic para migraciones, pero para desarrollo esto es ideal.
     """
-    # Importamos los modelos aquí para evitar dependencias circulares
-    from app.models.user import User
+    # Importamos el módulo de modelos completo aquí para evitar dependencias circulares.
+    # Al hacer esto, Python lee el archivo app/models/__init__.py, cargando todos los
+    # modelos (User, Insumo, etc.) en memoria para que SQLAlchemy los detecte.
+    import app.models
+
     async with engine.begin() as conn:
         # Crea todas las tablas que hereden de 'Base'
         await conn.run_sync(Base.metadata.create_all)
