@@ -2,15 +2,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
-# Importamos la función para crear tablas y nuestro router
-from app.core.database import create_tables
+
+# ELIMINAMOS la importación de create_tables
 from app.routers import auth, users
 
 # Código que se ejecuta al arrancar y apagar el servidor
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Crea las tablas en la BD si no existen
-    await create_tables()
+    # ELIMINADO: await create_tables()
+    # Ahora Alembic es el único responsable de crear/modificar tablas.
     yield
     # Al apagar: aquí podríamos cerrar conexiones, etc. (vacío por ahora)
 
@@ -46,14 +46,13 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS, 
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # CONECTAMOS NUESTRO ROUTER AQUÍ
-# Prefix añade automáticamente /api/v1/auth antes de /register o /login
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Autenticación"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Usuarios"])
 

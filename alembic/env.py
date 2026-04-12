@@ -7,10 +7,14 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# --- TUS IMPORTACIONES DE KITCHY ---
+# IMPORTACIONES DE KITCHY
 from app.core.config import settings
 from app.core.database import Base
-from app.models.user import User  # IMPORTANTE: Aquí importaremos los futuros modelos
+
+# Modelos para que Alembic los detecte
+from app.models.user import User
+from app.models.insumo import Insumo
+from app.models.movimiento_insumo import MovimientoInsumo
 
 config = context.config
 

@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
 
+    # AÑADIDO: Por defecto asumimos que estamos en local
+    POSTGRES_HOST: str = "localhost"
+
     # Variables de Seguridad JWT
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
@@ -15,12 +18,12 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        # Construimos la URL de conexión usando el driver asyncpg
-        # db es el nombre del contenedor de la base de datos en docker-compose.yml
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@db:5432/{self.POSTGRES_DB}"
+        # AÑADIDO: Ahora usamos self.POSTGRES_HOST.
+        # En Windows será 'localhost', en Docker será 'db'. ¡Magia pura!
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:5432/{self.POSTGRES_DB}"
 
-    # Le decimos a Pydantic que lea estas variables desde el archivo .env
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # AÑADIDO: extra="ignore" previene que Pydantic crashee si agregamos cosas al .env después
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 # Instanciamos las configuraciones para usarlas en toda la app
