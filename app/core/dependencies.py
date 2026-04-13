@@ -1,6 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
+import uuid  # <-- AÑADIDO: Importamos uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -22,13 +23,17 @@ async def get_current_user(
     )
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
+        user_id_str: str = payload.get("sub")
+        if user_id_str is None:
             raise credentials_exception
-    except jwt.PyJWTError:
+
+        # AÑADIDO: Convertimos el string a UUID validado
+        user_id = uuid.UUID(user_id_str)
+
+    except (jwt.PyJWTError, ValueError):  # ValueError captura si el UUID está mal formado
         raise credentials_exception
 
-    query = select(User).where(User.id == int(user_id))
+    query = select(User).where(User.id == user_id)
     result = await db.execute(query)
     user = result.scalars().first()
 

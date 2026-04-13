@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy import Column, String, Numeric, Date, Boolean, ForeignKey, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-
+from decimal import Decimal
 from app.core.database import Base
 
 
@@ -40,3 +40,10 @@ class Insumo(Base):
 
     # Relación bidireccional. Permitirá acceder a user.insumos o insumo.usuario.
     usuario = relationship('User', backref='insumos')
+
+    @property
+    def precio_unitario(self) -> Decimal:
+        """Calcula el precio por unidad al vuelo."""
+        if self.cantidad_comprada and self.cantidad_comprada > 0:
+            return (self.precio_compra / self.cantidad_comprada).quantize(Decimal('0.0001'))
+        return Decimal('0.0000')

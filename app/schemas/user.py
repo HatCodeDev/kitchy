@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from datetime import datetime
+from uuid import UUID  # <-- AÑADIDO
 
 class UserCreate(BaseModel):
     """Esquema para cuando el usuario se registra (recibe datos)"""
@@ -8,7 +9,7 @@ class UserCreate(BaseModel):
 
 class UserResponse(BaseModel):
     """Esquema para cuando respondemos al usuario (envía datos)"""
-    id: int = Field(..., description="ID único del usuario en la base de datos")
+    id: UUID = Field(..., description="ID único del usuario en la base de datos")  # <-- CORREGIDO A UUID
     email: EmailStr
     is_active: bool = Field(default=True, description="Indica si la cuenta está habilitada")
     created_at: datetime = Field(..., description="Fecha y hora de registro")
