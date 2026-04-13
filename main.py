@@ -3,16 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
 
-# ELIMINAMOS la importación de create_tables
-from app.routers import auth, users
+from app.routers import auth, users, insumos
 
-# Código que se ejecuta al arrancar y apagar el servidor
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ELIMINADO: await create_tables()
-    # Ahora Alembic es el único responsable de crear/modificar tablas.
     yield
-    # Al apagar: aquí podríamos cerrar conexiones, etc. (vacío por ahora)
 
 tags_metadata = [
     {
@@ -55,6 +50,7 @@ app.add_middleware(
 # CONECTAMOS NUESTRO ROUTER AQUÍ
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Autenticación"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Usuarios"])
+app.include_router(insumos.router, prefix="/api/v1/insumos", tags=["Insumos"])
 
 @app.get("/", tags=["Health Check"])
 def health_check():
