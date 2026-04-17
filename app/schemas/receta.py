@@ -7,7 +7,7 @@ from .insumo import InsumoResponse  # Conexión con el Core de Insumos [cite: 14
 # --- Componentes anidados de la Receta ---
 
 class IngredienteCreate(BaseModel):
-    """Schema para añadir un insumo a la receta"""
+    """Schema para añadir un ins<aumo a la receta"""
     insumo_id: UUID
     cantidad_usada: Decimal = Field(..., gt=0, description="Cantidad del insumo (mayor a 0)") # [cite: 1325, 1582]
     unidad: str = Field(..., description="Unidad de medida (ej. g, ml, pz)")
