@@ -10,5 +10,7 @@ from .receta import (
     IngredienteCreate,
     IngredienteResponse,
     PasoResponse,
-    GastoOcultoResponse
+    GastoOcultoResponse,
+    RecetaUpdate,
+    ToggleGastoRequest
 )

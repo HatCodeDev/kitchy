@@ -7,7 +7,7 @@ from .insumo import InsumoResponse  # Conexión con Insumos
 #Componentes anidados de la Receta
 
 class IngredienteCreate(BaseModel):
-    """Schema para añadir un ins<aumo a la receta"""
+    """Schema para añadir un insumo a la receta"""
     insumo_id: UUID
     cantidad_usada: Decimal = Field(..., gt=0, description="Cantidad del insumo (mayor a 0)")
     unidad: str = Field(..., description="Unidad de medida (ej. g, ml, pz)")
@@ -66,3 +66,13 @@ class RecetaResponse(BaseModel):
     costo_calculado: Optional[Decimal] = Field(default=None) # Campo computado opcional
 
     model_config = ConfigDict(from_attributes=True) # Permite lectura desde DB
+
+class ToggleGastoRequest(BaseModel):
+    """Schema para activar/desactivar un gasto oculto"""
+    activo: bool
+
+class RecetaUpdate(BaseModel):
+    """Schema para actualizar datos básicos de una receta"""
+    nombre: Optional[str] = None
+    porciones: Optional[int] = None
+    margen_pct: Optional[Decimal] = None
