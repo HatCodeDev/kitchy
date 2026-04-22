@@ -77,22 +77,41 @@ class InsumoService:
     @staticmethod
     async def update_insumo(db: AsyncSession, insumo_id: UUID, data: InsumoUpdate, usuario_id: UUID) -> Insumo:
         """
-        Actualización parcial (PATCH) con validación de propiedad.
+        Actualización parcial (PATCH) con validación de propiedad y propagación de precios.
         """
+        # Validar que el insumo exista y pertenezca al usuario
         insumo = await InsumoService.get_by_id(db, insumo_id, usuario_id)
 
-        update_data = data.model_dump(exclude_unset=True)  # Solo campos enviados por el cliente
+        # Extraer solo los campos que el cliente envió
+        update_data = data.model_dump(exclude_unset=True)
 
-        # Lógica de negocio: Si cambia el precio, actualizamos la fecha del último registro
+        # Detectar si hubo cambios que afecten el costo (RN-03)
+        # Si cambia el precio_compra O la cantidad_comprada, el precio_unitario cambia.
+        cambio_en_costo = "precio_compra" in update_data or "cantidad_comprada" in update_data
+
         if "precio_compra" in update_data:
             insumo.fecha_ultimo_precio = date.today()
-            # PricePropagationService.propagar_cambio_precio()
 
+        # Aplicar cambios al objeto
         for key, value in update_data.items():
             setattr(insumo, key, value)
 
+        # Guardar cambios en el Insumo
         await db.commit()
         await db.refresh(insumo)
+
+        # Si el costo cambió, notificamos al PricePropagationService
+        if cambio_en_costo:
+            # Importación local (Lazy Import) para evitar errores de importación circular
+            from app.services.price_propagation_service import PricePropagationService
+
+            # Lanzamos la propagación para que recalcule las recetas afectadas
+            await PricePropagationService.propagar_cambio_precio(
+                db=db,
+                insumo_id=insumo_id,
+                usuario_id=usuario_id
+            )
+
         return insumo
 
     @staticmethod
