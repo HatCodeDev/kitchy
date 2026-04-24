@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal, Optional
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 
@@ -48,4 +48,18 @@ class InsumoResponse(InsumoBase):
     activo: bool = Field(..., description="Estado lógico del insumo")
 
     # Esto le dice a Pydantic: "Puedes leer datos de un objeto SQLAlchemy directo"
+    model_config = ConfigDict(from_attributes=True)
+
+class MovimientoCreate(BaseModel):
+    tipo: Literal['entrada', 'salida']
+    cantidad: Decimal
+    motivo: Literal['compra', 'uso_produccion', 'merma']
+
+# AGREGAR ESTO:
+class MovimientoResponse(MovimientoCreate):
+    id: UUID
+    insumo_id: UUID
+    usuario_id: UUID
+    fecha: datetime
+
     model_config = ConfigDict(from_attributes=True)

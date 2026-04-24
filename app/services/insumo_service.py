@@ -6,7 +6,7 @@ from sqlalchemy import select, update, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from datetime import datetime, timezone
-
+from sqlalchemy import desc
 from app.models.movimiento_insumo import MovimientoInsumo
 from app.schemas.movimiento_insumo import MovimientoCreate
 from app.models.insumo import Insumo
@@ -181,3 +181,19 @@ class InsumoService:
 
         # h. Retornar insumo actualizado
         return insumo
+
+    @staticmethod
+    async def get_movimientos(db: AsyncSession, insumo_id: UUID, usuario_id: UUID, limit: int = 5) -> List[
+        MovimientoInsumo]:
+        """Obtiene el historial de movimientos de un insumo, ordenado por los más recientes."""
+        # Validamos que el insumo exista y sea del usuario
+        await InsumoService.get_by_id(db, insumo_id, usuario_id)
+
+        query = (
+            select(MovimientoInsumo)
+            .where(MovimientoInsumo.insumo_id == insumo_id)
+            .order_by(desc(MovimientoInsumo.fecha))
+            .limit(limit)
+        )
+        result = await db.execute(query)
+        return list(result.scalars().all())
