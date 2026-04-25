@@ -1,6 +1,6 @@
 import asyncio
 from decimal import Decimal
-
+from datetime import datetime, timezone, timedelta
 # Importaciones de Arquitectura Core
 from app.core.database import AsyncSessionLocal, engine, Base
 from app.core.security import get_password_hash
@@ -12,13 +12,17 @@ from app.models.receta import Receta
 from app.models.ingrediente_receta import IngredienteReceta
 from app.models.paso_receta import PasoReceta
 from app.models.gasto_oculto import GastoOculto
+from app.models.pedido import Pedido
+from app.models.linea_pedido import LineaPedido
 
 # Schemas y Servicios
 from app.schemas.insumo import InsumoCreate
 from app.schemas.receta import RecetaCreate, IngredienteCreate, PasoCreate
+from app.schemas.pedido import PedidoCreate, LineaPedidoCreate
 from app.services.insumo_service import InsumoService
 from app.services.receta_service import RecetaService
 from app.services.hidden_cost_service import HiddenCostService
+from app.services.pedido_service import PedidoService
 
 
 async def reset_database():
@@ -171,8 +175,61 @@ async def seed_database():
             ]
         ), usuario.id)
 
-        print("\n✅ ¡Restaurante Kitchy inaugurado con éxito!")
-        print("Datos de prueba realistas inyectados correctamente.")
+        # ---------------------------------------------------------
+        # 4. AGENDA DE PEDIDOS (Operatividad Real) 🟢 NUEVO
+        # ---------------------------------------------------------
+        print("\n📅 Agendando Pedidos para la semana...")
+        ahora = datetime.now(timezone.utc)
+
+        # CASO A: Pedido Pendiente (Urgente para mañana)
+        pedido_mañana = await PedidoService.create_pedido(db, PedidoCreate(
+            cliente_nombre="Ethan",
+            cliente_whatsapp="2215805068",
+            fecha_entrega=datetime.now(timezone.utc) + timedelta(days=1),
+            punto_entrega="Pick-up en Cocina",
+            notas="Empaque de regalo, por favor.",
+            lineas=[
+                LineaPedidoCreate(nombre_producto="Caja de Macarons", cantidad_porciones=2,
+                                  precio_acordado_mxn=Decimal('450.00'), receta_id=receta_macarons.id),
+                LineaPedidoCreate(nombre_producto="Hogaza Especial", cantidad_porciones=1,
+                                  precio_acordado_mxn=Decimal('120.00'), receta_id=receta_pan.id)
+            ]
+        ), usuario.id)
+        print(f"✅ Pedido PENDIENTE creado para mañana (Cliente: {pedido_mañana.cliente_nombre})")
+
+        # CASO B: Pedido En Preparación (Para hoy más tarde)
+        pedido_hoy = await PedidoService.create_pedido(db, PedidoCreate(
+            cliente_nombre="Hotel Plaza Eventos",
+            cliente_whatsapp="5587654321",
+            fecha_entrega=datetime.now(timezone.utc) + timedelta(days=1),
+            punto_entrega="Recepción Hotel Plaza",
+            lineas=[
+                LineaPedidoCreate(nombre_producto="Paella Gigante (12pax)", cantidad_porciones=3,
+                                  precio_acordado_mxn=Decimal('1800.00'), receta_id=receta_paella.id)
+            ]
+        ), usuario.id)
+        # Avanzamos el estado usando el Service
+        await PedidoService.cambiar_estado(db, pedido_hoy.id, "en_preparacion", usuario.id)
+        print(f"✅ Pedido EN PREPARACIÓN creado para hoy (Cliente: {pedido_hoy.cliente_nombre})")
+
+        # CASO C: Pedido Entregado (Historial y prueba de descuento de stock)
+        # Nota: Ponemos fecha futura cercana para que pase RN-01, pero lo marcamos como entregado para simular cierre
+        pedido_cerrado = await PedidoService.create_pedido(db, PedidoCreate(
+            cliente_nombre="Cami",
+            cliente_whatsapp="2491827883",
+            fecha_entrega=datetime.now(timezone.utc) + timedelta(days=1),
+            lineas=[
+                LineaPedidoCreate(nombre_producto="Hogaza de Masa Madre", cantidad_porciones=5,
+                                  precio_acordado_mxn=Decimal('500.00'), receta_id=receta_pan.id)
+            ]
+        ), usuario.id)
+        # Ciclo completo de la máquina de estados
+        await PedidoService.cambiar_estado(db, pedido_cerrado.id, "en_preparacion", usuario.id)
+        await PedidoService.cambiar_estado(db, pedido_cerrado.id, "listo", usuario.id)
+        await PedidoService.cambiar_estado(db, pedido_cerrado.id, "entregado", usuario.id)
+        print(f"✅ Pedido ENTREGADO creado (Simulando historial y descuento de stock)")
+
+        print("\n🚀 ¡Base de Datos de Kitchy lista para pruebas en la App!")
 
 if __name__ == "__main__":
     asyncio.run(seed_database())

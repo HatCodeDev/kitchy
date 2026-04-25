@@ -6,3 +6,5 @@ from app.models.receta import Receta
 from app.models.ingrediente_receta import IngredienteReceta
 from app.models.gasto_oculto import GastoOculto
 from app.models.paso_receta import PasoReceta
+from app.models.pedido import Pedido
+from app.models.linea_pedido import LineaPedido
