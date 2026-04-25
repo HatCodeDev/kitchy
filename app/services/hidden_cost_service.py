@@ -47,6 +47,7 @@ class HiddenCostService:
         return resultado
 
     @staticmethod
+    @staticmethod
     async def toggle_gasto(
             db: AsyncSession,
             receta_id: UUID,
@@ -68,8 +69,10 @@ class HiddenCostService:
         gasto = result.scalar_one_or_none()
 
         if gasto:
-            # Si ya existe, solo cambiamos su estado activo
+            # Si ya existe, actualizamos todos los campos enviados
             gasto.activo = activo
+            gasto.valor = valor
+            gasto.es_porcentaje = es_porcentaje
         else:
             # Si no existe (porque lo borró o es una receta vieja), lo creamos
             gasto = GastoOculto(

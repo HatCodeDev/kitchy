@@ -19,6 +19,8 @@ from app.models.receta import Receta
 from app.models.ingrediente_receta import IngredienteReceta
 from app.models.gasto_oculto import GastoOculto
 from app.models.paso_receta import PasoReceta
+from app.models.pedido import Pedido
+from app.models.linea_pedido import LineaPedido
 
 config = context.config
 
@@ -47,7 +49,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
 
     with context.begin_transaction():
         context.run_migrations()
