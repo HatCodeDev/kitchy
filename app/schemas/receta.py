@@ -76,3 +76,5 @@ class RecetaUpdate(BaseModel):
     nombre: Optional[str] = None
     porciones: Optional[int] = None
     margen_pct: Optional[Decimal] = None
+    ingredientes: Optional[List[IngredienteCreate]] = None
+    pasos: Optional[List[PasoCreate]] = None

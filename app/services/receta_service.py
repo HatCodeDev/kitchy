@@ -9,7 +9,7 @@ from app.models.receta import Receta
 from app.models.ingrediente_receta import IngredienteReceta
 from app.models.paso_receta import PasoReceta
 from app.models.insumo import Insumo
-from app.schemas.receta import RecetaCreate
+from app.schemas.receta import RecetaCreate, RecetaUpdate
 from app.services.hidden_cost_service import HiddenCostService
 from app.services.cost_calculation_service import CostCalculationService
 
@@ -50,15 +50,28 @@ class RecetaService:
         return receta
 
     @staticmethod
-    async def update_receta(db: AsyncSession, receta_id: UUID, update_data: dict, usuario_id: UUID) -> Receta:
-        """Actualiza los datos básicos de la receta (nombre, porciones, margen)."""
-        # Validamos que exista y sea del usuario
+    async def update_receta(db: AsyncSession, receta_id: UUID, data: RecetaUpdate, usuario_id: UUID) -> Receta:
+        """Actualización completa de la receta, incluyendo ingredientes y pasos."""
         receta = await RecetaService.get_by_id(db, receta_id, usuario_id)
 
-        # Aplicamos solo los cambios que vengan en el diccionario
-        for key, value in update_data.items():
-            if hasattr(receta, key):
-                setattr(receta, key, value)
+        update_data = data.model_dump(exclude_unset=True)
+
+        for key in ["nombre", "porciones", "margen_pct"]:
+            if key in update_data:
+                setattr(receta, key, update_data[key])
+
+        if "ingredientes" in update_data:
+            # Vaciamos la lista actual (SQLAlchemy borrará los huérfanos gracias al cascade)
+            receta.ingredientes.clear()
+            for ing in update_data["ingredientes"]:
+                nuevo_ing = IngredienteReceta(receta_id=receta.id, **ing)
+                receta.ingredientes.append(nuevo_ing)
+
+        if "pasos" in update_data:
+            receta.pasos.clear()
+            for paso in update_data["pasos"]:
+                nuevo_paso = PasoReceta(receta_id=receta.id, **paso)
+                receta.pasos.append(nuevo_paso)
 
         await db.commit()
         await db.refresh(receta)

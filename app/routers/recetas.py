@@ -52,9 +52,8 @@ async def update_receta(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Actualiza datos básicos de la receta (nombre, porciones, margen)."""
-    update_data = data.model_dump(exclude_unset=True)
-    return await RecetaService.update_receta(db, id, update_data, current_user.id)
+    """Actualiza datos básicos de la receta y sus relaciones (ingredientes/pasos)."""
+    return await RecetaService.update_receta(db, id, data, current_user.id)
 
 @router.delete("/{id}")
 async def delete_receta(
