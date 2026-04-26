@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.pedido import Pedido
 from app.models.linea_pedido import LineaPedido
 from app.schemas.pedido import PedidoCreate
+from app.services.produccion_service import ProduccionService
 
-# STUB: E7-08 (Si aún no tienes el archivo app/utils/whatsapp.py, coméntalo o créalo vacío)
 try:
     from app.utils.whatsapp import build_whatsapp_url
 except ImportError:
@@ -69,7 +69,7 @@ class PedidoService:
             )
             db.add(nueva_linea)
 
-        #  Programar Recordatorio (E9-02)
+        #  Programar Recordatorio
         # fecha_recordatorio = data.fecha_entrega - timedelta(hours=2)
         # NotificacionService.programar(..., fecha_recordatorio)
 
@@ -156,9 +156,8 @@ class PedidoService:
 
         # GATILLO DE INVENTARIO
         if nuevo_estado == "entregado":
-            # TODO: Llamar al InventarioService para descontar insumos
-            # await InventarioService.descontar_por_pedido(db, pedido.id, usuario_id)
-            pass
+            # Llamamos al Orquestador para que cruce las líneas con las recetas y descuente la alacena
+            await ProduccionService.descontar_insumos_por_pedido(db, pedido.id, usuario_id)
 
         await db.commit()
         await db.refresh(pedido)
