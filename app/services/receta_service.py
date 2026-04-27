@@ -61,10 +61,21 @@ class RecetaService:
                 setattr(receta, key, update_data[key])
 
         if "ingredientes" in update_data:
-            # Vaciamos la lista actual (SQLAlchemy borrará los huérfanos gracias al cascade)
+            # 1. Vaciamos la lista actual
             receta.ingredientes.clear()
-            for ing in update_data["ingredientes"]:
-                nuevo_ing = IngredienteReceta(receta_id=receta.id, **ing)
+
+            # 2. Obligamos a la BD a ejecutar los DELETE (Evita el Error de UniqueConstraint)
+            await db.flush()
+
+            # 3. Insertamos los nuevos
+            for ing_dict in update_data["ingredientes"]:
+                # Asignación EXPLÍCITA para evitar el 500 por inyección de llaves
+                nuevo_ing = IngredienteReceta(
+                    receta_id=receta.id,
+                    insumo_id=ing_dict["insumo_id"],
+                    cantidad_usada=ing_dict["cantidad_usada"],
+                    unidad=ing_dict["unidad"]
+                )
                 receta.ingredientes.append(nuevo_ing)
 
         if "pasos" in update_data:
