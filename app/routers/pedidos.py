@@ -40,6 +40,16 @@ async def obtener_pedido(
     """Obtiene el detalle completo de un pedido específico."""
     return await PedidoService.get_by_id(db, pedido_id, current_user.id)
 
+@router.put("/{pedido_id}", response_model=PedidoResponse)
+async def actualizar_pedido(
+    pedido_id: UUID,
+    data: PedidoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Actualiza los datos generales de un pedido y sus líneas."""
+    return await PedidoService.update_pedido(db, pedido_id, data, current_user.id)
+
 @router.patch("/{pedido_id}/estado", response_model=PedidoResponse)
 async def cambiar_estado_pedido(
     pedido_id: UUID,

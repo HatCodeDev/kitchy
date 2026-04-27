@@ -51,12 +51,13 @@ class PedidoCreate(BaseModel):
 
 
 class PedidoUpdate(BaseModel):
-    """Payload para editar datos básicos (No incluye líneas ni estado)"""
+    """Payload para editar datos completos del pedido"""
     cliente_nombre: Optional[str] = Field(default=None, min_length=1, max_length=150)
     cliente_whatsapp: Optional[str] = Field(default=None, pattern=r'^[0-9]{10}$')
     fecha_entrega: Optional[datetime] = None
     punto_entrega: Optional[str] = Field(default=None, max_length=255)
     notas: Optional[str] = None
+    lineas: Optional[List[LineaPedidoCreate]] = None
 
     @field_validator('fecha_entrega')
     @classmethod
@@ -64,8 +65,11 @@ class PedidoUpdate(BaseModel):
         if v is not None:
             if v.tzinfo is None:
                 v = v.replace(tzinfo=timezone.utc)
-            if v < datetime.now(timezone.utc):
-                raise ValueError('La fecha de entrega debe ser en el futuro')
+            # Nota: Al editar, permitimos fechas en el pasado si el pedido ya existe, 
+            # pero la validación de Pydantic es general. Para flexibilidad, 
+            # quitaremos esta restricción estricta aquí y la manejaremos en el Service si es necesario.
+            # if v < datetime.now(timezone.utc):
+            #     raise ValueError('La fecha de entrega debe ser en el futuro')
         return v
 
 
