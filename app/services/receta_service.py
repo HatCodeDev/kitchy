@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,9 +51,8 @@ class RecetaService:
 
     @staticmethod
     async def update_receta(db: AsyncSession, receta_id: UUID, data: RecetaUpdate, usuario_id: UUID) -> Receta:
-        """Actualización completa de la receta, incluyendo ingredientes y pasos."""
+        """Actualización completa con patrón de flush para evitar UniqueConstraint."""
         receta = await RecetaService.get_by_id(db, receta_id, usuario_id)
-
         update_data = data.model_dump(exclude_unset=True)
 
         for key in ["nombre", "porciones", "margen_pct"]:
@@ -61,15 +60,9 @@ class RecetaService:
                 setattr(receta, key, update_data[key])
 
         if "ingredientes" in update_data:
-            # 1. Vaciamos la lista actual
             receta.ingredientes.clear()
-
-            # 2. Obligamos a la BD a ejecutar los DELETE (Evita el Error de UniqueConstraint)
-            await db.flush()
-
-            # 3. Insertamos los nuevos
+            await db.flush()  # Limpia la "mesa" para evitar colisión de IDs
             for ing_dict in update_data["ingredientes"]:
-                # Asignación EXPLÍCITA para evitar el 500 por inyección de llaves
                 nuevo_ing = IngredienteReceta(
                     receta_id=receta.id,
                     insumo_id=ing_dict["insumo_id"],
@@ -79,15 +72,9 @@ class RecetaService:
                 receta.ingredientes.append(nuevo_ing)
 
         if "pasos" in update_data:
-            # 1. Vaciamos la lista actual
             receta.pasos.clear()
-
-            # 2. Obligamos a la BD a ejecutar los DELETE (Evita el Error de UniqueConstraint en pasos)
             await db.flush()
-
-            # 3. Insertamos los nuevos
             for paso_dict in update_data["pasos"]:
-                # Asignación EXPLÍCITA para evitar el 500 por inyección de llaves
                 nuevo_paso = PasoReceta(
                     receta_id=receta.id,
                     orden=paso_dict["orden"],
@@ -98,13 +85,12 @@ class RecetaService:
                 receta.pasos.append(nuevo_paso)
 
         await db.commit()
-        await db.refresh(receta)
-        return receta
+        # En lugar de refresh, re-consultamos con relaciones para evitar Lazy Loading Error
+        return await RecetaService.get_by_id(db, receta.id, usuario_id)
 
     @staticmethod
     async def create_receta(db: AsyncSession, data: RecetaCreate, usuario_id: UUID) -> Receta:
-        """Crea la receta, sus relaciones y gastos default en UNA SOLA transacción."""
-        # Crear Receta base
+        """Crea la receta y sus gastos default en una sola transacción."""
         nueva_receta = Receta(
             usuario_id=usuario_id,
             nombre=data.nombre,
@@ -113,9 +99,8 @@ class RecetaService:
             activa=True
         )
         db.add(nueva_receta)
-        await db.flush()  # Obtiene el ID generado sin hacer commit final
+        await db.flush()
 
-        # Agregar Ingredientes
         for ingrediente in data.ingredientes:
             nuevo_ing = IngredienteReceta(
                 receta_id=nueva_receta.id,
@@ -123,7 +108,6 @@ class RecetaService:
             )
             db.add(nuevo_ing)
 
-        # Agregar Pasos
         for paso in data.pasos:
             nuevo_paso = PasoReceta(
                 receta_id=nueva_receta.id,
@@ -131,13 +115,10 @@ class RecetaService:
             )
             db.add(nuevo_paso)
 
-        # Inicializar Gastos Ocultos (Llamada síncrona, sin commit interno)
         HiddenCostService.crear_gastos_default(db, nueva_receta.id, usuario_id)
-
-        # Commit de toda la transacción (ACID)
         await db.commit()
 
-        # Retornar la receta con sus relaciones cargadas
+        # Re-consulta explícita para asegurar que el objeto devuelto es completo
         return await RecetaService.get_by_id(db, nueva_receta.id, usuario_id)
 
     @staticmethod
@@ -149,9 +130,18 @@ class RecetaService:
         return True
 
     @staticmethod
-    async def calcular_costeo(db: AsyncSession, receta_id: UUID, usuario_id: UUID) -> Dict[str, Any]:
-        """Prepara los datos y llama a la calculadora de costos."""
-        receta = await RecetaService.get_by_id(db, receta_id, usuario_id)
+    async def calcular_costeo(
+            db: AsyncSession,
+            receta_or_id: Union[UUID, Receta],  # Acepta ID o el objeto completo
+            usuario_id: UUID
+    ) -> Dict[str, Any]:
+        """Calcula el costeo. Si recibe el objeto Receta, evita una consulta extra."""
+
+        # Lógica inteligente de carga:
+        if isinstance(receta_or_id, UUID):
+            receta = await RecetaService.get_by_id(db, receta_or_id, usuario_id)
+        else:
+            receta = receta_or_id
 
         # Obtener precios de insumos en una sola query
         ids_insumos = [ing.insumo_id for ing in receta.ingredientes]
@@ -165,7 +155,7 @@ class RecetaService:
             mapa_precios[row.id] = unitario
 
         # Obtener gastos con lógica de Fallback (Específico vs Global)
-        gastos = await HiddenCostService.get_gastos_para_receta(db, receta_id, usuario_id)
+        gastos = await HiddenCostService.get_gastos_para_receta(db, receta.id, usuario_id)
 
         # Calcular y retornar
         return CostCalculationService.calcular_costo(receta, mapa_precios, gastos)

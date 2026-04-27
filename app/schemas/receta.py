@@ -24,7 +24,7 @@ class PasoCreate(BaseModel):
     """Schema para los pasos del procedimiento"""
     orden: int = Field(..., gt=0, description="Número de paso (1, 2, 3...)")
     descripcion: str = Field(..., min_length=5, description="Instrucciones del paso")
-    duracion_segundos: Optional[int] = Field(default=None, gt=0)
+    duracion_segundos: Optional[int] = Field(default=None, ge=0)
     es_critico: bool = Field(default=False)
 
 class GastoOcultoCreate(BaseModel):
@@ -63,7 +63,8 @@ class RecetaResponse(BaseModel):
     ingredientes: List[IngredienteResponse] # Usa respuesta detallada para Flutter
     pasos: List[PasoResponse]
     gastos_ocultos: List[GastoOcultoResponse]
-    costo_calculado: Optional[Decimal] = Field(default=None) # Campo computado opcional
+    costo_por_porcion: Optional[Decimal] = Field(default=None, description="Costo unitario calculado")
+    precio_sugerido: Optional[Decimal] = Field(default=None, description="Precio de venta sugerido")
 
     model_config = ConfigDict(from_attributes=True) # Permite lectura desde DB
 

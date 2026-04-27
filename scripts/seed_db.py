@@ -1,6 +1,9 @@
 import asyncio
 from decimal import Decimal
 from datetime import datetime, timezone, timedelta
+import os
+from dotenv import load_dotenv
+load_dotenv()
 # Importaciones de Arquitectura Core
 from app.core.database import AsyncSessionLocal, engine, Base
 from app.core.security import get_password_hash
@@ -26,207 +29,199 @@ from app.services.pedido_service import PedidoService
 
 
 async def reset_database():
-    """💥 LA BOMBA ATÓMICA: Borra todas las tablas y las vuelve a crear vacías."""
-    print("☢️  ATENCIÓN: Destruyendo base de datos actual...")
+    """LA BOMBA ATOMICA: Borra todas las tablas y las vuelve a crear vacias."""
+    print("ATENCION: Destruyendo base de datos actual...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-        print("✅ Tablas eliminadas.")
+        print("OK: Tablas eliminadas.")
         await conn.run_sync(Base.metadata.create_all)
-        print("✅ Tablas recreadas en blanco.")
+        print("OK: Tablas recreadas en blanco.")
 
 
 async def seed_database():
     await reset_database()
-    print("\n🌱 Iniciando el sembrado Realista de Kitchy...")
+    print("\nIniciando el sembrado de Postres Reales en Kitchy...")
 
     async with AsyncSessionLocal() as db:
         # ---------------------------------------------------------
-        # 1. CREAR EL USUARIO CHEF
+        # 1. CREAR EL USUARIO REPOSTERO
         # ---------------------------------------------------------
         usuario = User(
-            email="chef@kitchy.com",
+            email="chef@kitchy.com ",
             hashed_password=get_password_hash("Flutter2026!"),
             is_active=True
         )
         db.add(usuario)
         await db.commit()
         await db.refresh(usuario)
-        print(f"\n👤 Perfil de Chef Emprendedor creado: {usuario.email}")
+        print(f"\nPerfil de Repostero Emprendedor creado: {usuario.email}")
 
         # ---------------------------------------------------------
-        # 2. LLENAR LA ALACENA (Compras de Mercado Mexicano)
+        # 2. LLENAR LA ALACENA (Insumos de Reposteria)
         # ---------------------------------------------------------
-        print("🛒 Ingresando facturas de compra del Mercado...")
+        print("Ingresando facturas de insumos de reposteria...")
 
-        insumo_masa = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Masa de Maíz Nixtamalizado", unidad="kg", precio_compra=Decimal('22.00'), cantidad_comprada=Decimal('50.0'), alerta_minimo=Decimal('5.0')), usuario.id)
+        ins_harina = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Harina de Trigo Todo Uso", unidad="kg", precio_compra=Decimal('22.50'), cantidad_comprada=Decimal('20.0'), alerta_minimo=Decimal('5.0')), usuario.id)
 
-        insumo_tortilla = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Tortilla de Maíz Taquera", unidad="kg", precio_compra=Decimal('20.00'), cantidad_comprada=Decimal('10.0'), alerta_minimo=Decimal('2.0')), usuario.id)
+        ins_azucar = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Azúcar Estándar", unidad="kg", precio_compra=Decimal('28.00'), cantidad_comprada=Decimal('15.0'), alerta_minimo=Decimal('3.0')), usuario.id)
 
-        insumo_cerdo = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Carne de Cerdo (Cabeza de Lomo)", unidad="kg", precio_compra=Decimal('145.00'), cantidad_comprada=Decimal('15.0'), alerta_minimo=Decimal('2.0')), usuario.id)
+        ins_huevos = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Huevo Blanco (Cono 30 pz)", unidad="pz", precio_compra=Decimal('85.00'), cantidad_comprada=Decimal('90.0'), alerta_minimo=Decimal('15.0')), usuario.id)
 
-        insumo_pollo = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Pechuga de Pollo Deshebrada", unidad="kg", precio_compra=Decimal('160.00'), cantidad_comprada=Decimal('5.0'), alerta_minimo=Decimal('1.0')), usuario.id)
+        ins_leche_cond = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Leche Condensada (Lata 387g)", unidad="pz", precio_compra=Decimal('27.50'), cantidad_comprada=Decimal('24.0'), alerta_minimo=Decimal('6.0')), usuario.id)
 
-        insumo_jitomate = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Jitomate Saladet", unidad="kg", precio_compra=Decimal('35.00'), cantidad_comprada=Decimal('10.0'), alerta_minimo=Decimal('1.0')), usuario.id)
+        ins_leche_evap = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Leche Evaporada (Lata 360ml)", unidad="pz", precio_compra=Decimal('21.00'), cantidad_comprada=Decimal('24.0'), alerta_minimo=Decimal('6.0')), usuario.id)
 
-        insumo_tomatillo = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Tomate Verde (Tomatillo)", unidad="kg", precio_compra=Decimal('28.00'), cantidad_comprada=Decimal('10.0'), alerta_minimo=Decimal('1.0')), usuario.id)
+        ins_queso_crema = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Queso Crema (Barra 190g)", unidad="pz", precio_compra=Decimal('36.00'), cantidad_comprada=Decimal('20.0'), alerta_minimo=Decimal('4.0')), usuario.id)
 
-        insumo_chile_serrano = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Chile Serrano Fresco", unidad="kg", precio_compra=Decimal('45.00'), cantidad_comprada=Decimal('2.0'), alerta_minimo=Decimal('0.2')), usuario.id)
+        ins_mantequilla = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Mantequilla Sin Sal (90g)", unidad="pz", precio_compra=Decimal('24.00'), cantidad_comprada=Decimal('30.0'), alerta_minimo=Decimal('5.0')), usuario.id)
 
-        insumo_chile_guajillo = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Chile Guajillo Seco", unidad="kg", precio_compra=Decimal('180.00'), cantidad_comprada=Decimal('1.0'), alerta_minimo=Decimal('0.1')), usuario.id)
+        ins_vainilla = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Esencia de Vainilla", unidad="ml", precio_compra=Decimal('45.00'), cantidad_comprada=Decimal('500.0'), alerta_minimo=Decimal('50.0')), usuario.id)
 
-        insumo_aguacate = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Aguacate Hass Extra", unidad="kg", precio_compra=Decimal('85.00'), cantidad_comprada=Decimal('5.0'), alerta_minimo=Decimal('0.5')), usuario.id)
+        ins_cocoa = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Cocoa en Polvo", unidad="kg", precio_compra=Decimal('180.00'), cantidad_comprada=Decimal('2.0'), alerta_minimo=Decimal('0.5')), usuario.id)
 
-        insumo_crema = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Crema Ácida de Rancho", unidad="l", precio_compra=Decimal('65.00'), cantidad_comprada=Decimal('4.0'), alerta_minimo=Decimal('0.5')), usuario.id)
+        ins_leche_entera = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Leche Entera", unidad="l", precio_compra=Decimal('26.00'), cantidad_comprada=Decimal('12.0'), alerta_minimo=Decimal('2.0')), usuario.id)
 
-        insumo_queso = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Queso Fresco Desmoronado", unidad="kg", precio_compra=Decimal('120.00'), cantidad_comprada=Decimal('3.0'), alerta_minimo=Decimal('0.3')), usuario.id)
+        ins_frutos_rojos = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Mezcla de Frutos Rojos (Congelados)", unidad="kg", precio_compra=Decimal('145.00'), cantidad_comprada=Decimal('5.0'), alerta_minimo=Decimal('1.0')), usuario.id)
 
-        insumo_aceite = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Aceite Vegetal", unidad="l", precio_compra=Decimal('38.00'), cantidad_comprada=Decimal('20.0'), alerta_minimo=Decimal('2.0')), usuario.id)
-
-        insumo_cebolla = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Cebolla Blanca", unidad="kg", precio_compra=Decimal('25.00'), cantidad_comprada=Decimal('10.0'), alerta_minimo=Decimal('1.0')), usuario.id)
-
-        insumo_maiz_pozole = await InsumoService.create_insumo(db, InsumoCreate(
-            nombre="Maíz Cacahuazintle Precocido", unidad="kg", precio_compra=Decimal('45.00'), cantidad_comprada=Decimal('10.0'), alerta_minimo=Decimal('1.0')), usuario.id)
+        ins_galleta_maria = await InsumoService.create_insumo(db, InsumoCreate(
+            nombre="Galletas María (Paquete 170g)", unidad="pz", precio_compra=Decimal('16.00'), cantidad_comprada=Decimal('20.0'), alerta_minimo=Decimal('4.0')), usuario.id)
 
         # ---------------------------------------------------------
-        # 3. CREAR EL MENÚ (Recetas Tradicionales Mexicanas)
+        # 3. CREAR EL RECETARIO (Postres Reales)
         # ---------------------------------------------------------
-        print("\n📋 Redactando Fichas Técnicas de Recetas Mexicanas...")
+        print("\nCreando Recetas de Postres...")
 
-        # --- CASO 1: TACOS AL PASTOR ---
-        receta_pastor = await RecetaService.create_receta(db, RecetaCreate(
-            nombre="Orden de Tacos al Pastor (5 pz)", porciones=1, margen_pct=Decimal('200.0'),
+        # --- RECETA 1: FLAN NAPOLITANO ---
+        receta_flan = await RecetaService.create_receta(db, RecetaCreate(
+            nombre="Flan Napolitano Tradicional", porciones=8, margen_pct=Decimal('150.0'),
             ingredientes=[
-                IngredienteCreate(insumo_id=insumo_tortilla.id, cantidad_usada=Decimal('0.150'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_cerdo.id, cantidad_usada=Decimal('0.200'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_cebolla.id, cantidad_usada=Decimal('0.030'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_aceite.id, cantidad_usada=Decimal('0.020'), unidad="l")
+                IngredienteCreate(insumo_id=ins_leche_cond.id, cantidad_usada=Decimal('1.0'), unidad="pz"),
+                IngredienteCreate(insumo_id=ins_leche_evap.id, cantidad_usada=Decimal('1.0'), unidad="pz"),
+                IngredienteCreate(insumo_id=ins_queso_crema.id, cantidad_usada=Decimal('1.0'), unidad="pz"),
+                IngredienteCreate(insumo_id=ins_huevos.id, cantidad_usada=Decimal('5.0'), unidad="pz"),
+                IngredienteCreate(insumo_id=ins_azucar.id, cantidad_usada=Decimal('0.150'), unidad="kg"),
+                IngredienteCreate(insumo_id=ins_vainilla.id, cantidad_usada=Decimal('15.0'), unidad="ml")
             ],
             pasos=[
-                PasoCreate(orden=1, descripcion="Marinar la carne con el adobo de achiote", duracion_segundos=1800),
-                PasoCreate(orden=2, descripcion="Montar el trompo o picar para plancha", duracion_segundos=600),
-                PasoCreate(orden=3, descripcion="Cocer la carne a fuego alto hasta dorar", duracion_segundos=900, es_critico=True),
-                PasoCreate(orden=4, descripcion="Calentar tortillas y montar con cebolla y piña", duracion_segundos=120)
+                PasoCreate(orden=1, descripcion="Hacer el caramelo con el azúcar y verter en el molde", duracion_segundos=600),
+                PasoCreate(orden=2, descripcion="Licuar la leche condensada, evaporada, queso crema, huevos y vainilla", duracion_segundos=180),
+                PasoCreate(orden=3, descripcion="Verter la mezcla en el molde y tapar con aluminio", duracion_segundos=120),
+                PasoCreate(orden=4, descripcion="Cocer a baño María en horno a 180°C", duracion_segundos=3600, es_critico=True),
+                PasoCreate(orden=5, descripcion="Dejar enfriar y refrigerar antes de desmoldar", duracion_segundos=7200)
+            ]
+        ), usuario.id)
+        # Activar gasto de gas/luz para el horno
+        await HiddenCostService.toggle_gasto(db, receta_flan.id, tipo='gas_luz', activo=True, usuario_id=usuario.id, valor=Decimal('10.0'), es_porcentaje=True)
+
+        # --- RECETA 2: PASTEL DE CHOCOLATE ---
+        receta_pastel_choc = await RecetaService.create_receta(db, RecetaCreate(
+            nombre="Pastel de Chocolate Húmedo", porciones=12, margen_pct=Decimal('180.0'),
+            ingredientes=[
+                IngredienteCreate(insumo_id=ins_harina.id, cantidad_usada=Decimal('0.350'), unidad="kg"),
+                IngredienteCreate(insumo_id=ins_azucar.id, cantidad_usada=Decimal('0.400'), unidad="kg"),
+                IngredienteCreate(insumo_id=ins_cocoa.id, cantidad_usada=Decimal('0.080'), unidad="kg"),
+                IngredienteCreate(insumo_id=ins_huevos.id, cantidad_usada=Decimal('3.0'), unidad="pz"),
+                IngredienteCreate(insumo_id=ins_leche_entera.id, cantidad_usada=Decimal('0.250'), unidad="l"),
+                IngredienteCreate(insumo_id=ins_mantequilla.id, cantidad_usada=Decimal('1.0'), unidad="pz") # 90g
+            ],
+            pasos=[
+                PasoCreate(orden=1, descripcion="Mezclar ingredientes secos tamizados", duracion_segundos=300),
+                PasoCreate(orden=2, descripcion="Incorporar huevos, leche y mantequilla derretida", duracion_segundos=600),
+                PasoCreate(orden=3, descripcion="Hornear a 175°C hasta que el palillo salga limpio", duracion_segundos=2700, es_critico=True)
             ]
         ), usuario.id)
 
-        # --- CASO 2: CHILAQUILES VERDES ---
-        receta_chilaquiles = await RecetaService.create_receta(db, RecetaCreate(
-            nombre="Chilaquiles Verdes con Pollo", porciones=1, margen_pct=Decimal('150.0'),
+        # --- RECETA 3: CHEESECAKE DE FRUTOS ROJOS ---
+        receta_cheesecake = await RecetaService.create_receta(db, RecetaCreate(
+            nombre="Cheesecake Frutos Rojos (Sin Horno)", porciones=10, margen_pct=Decimal('120.0'),
             ingredientes=[
-                IngredienteCreate(insumo_id=insumo_tortilla.id, cantidad_usada=Decimal('0.200'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_tomatillo.id, cantidad_usada=Decimal('0.250'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_pollo.id, cantidad_usada=Decimal('0.100'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_crema.id, cantidad_usada=Decimal('0.050'), unidad="l"),
-                IngredienteCreate(insumo_id=insumo_queso.id, cantidad_usada=Decimal('0.030'), unidad="kg")
+                IngredienteCreate(insumo_id=ins_galleta_maria.id, cantidad_usada=Decimal('1.0'), unidad="pz"),
+                IngredienteCreate(insumo_id=ins_mantequilla.id, cantidad_usada=Decimal('1.0'), unidad="pz"),
+                IngredienteCreate(insumo_id=ins_queso_crema.id, cantidad_usada=Decimal('3.0'), unidad="pz"),
+                IngredienteCreate(insumo_id=ins_azucar.id, cantidad_usada=Decimal('0.150'), unidad="kg"),
+                IngredienteCreate(insumo_id=ins_frutos_rojos.id, cantidad_usada=Decimal('0.300'), unidad="kg")
             ],
             pasos=[
-                PasoCreate(orden=1, descripcion="Freír los totopos de tortilla hasta que estén crujientes", duracion_segundos=600),
-                PasoCreate(orden=2, descripcion="Cocer tomatillos y chiles para la salsa", duracion_segundos=900),
-                PasoCreate(orden=3, descripcion="Licuar salsa y sazonar en olla", duracion_segundos=600, es_critico=True),
-                PasoCreate(orden=4, descripcion="Bañar totopos, agregar pollo, crema y queso", duracion_segundos=180)
+                PasoCreate(orden=1, descripcion="Triturar galletas y mezclar con mantequilla para la base", duracion_segundos=600),
+                PasoCreate(orden=2, descripcion="Batir el queso crema con el azúcar", duracion_segundos=600),
+                PasoCreate(orden=3, descripcion="Montar sobre la base y refrigerar", duracion_segundos=3600, es_critico=True),
+                PasoCreate(orden=4, descripcion="Decorar con los frutos rojos antes de servir", duracion_segundos=300)
             ]
         ), usuario.id)
-        await HiddenCostService.toggle_gasto(db, receta_chilaquiles.id, tipo='gas_luz', activo=True, usuario_id=usuario.id, valor=Decimal('5.00'), es_porcentaje=False)
-
-        # --- CASO 3: POZOLE ROJO ---
-        receta_pozole = await RecetaService.create_receta(db, RecetaCreate(
-            nombre="Pozole Rojo de Cerdo (Gran Plato)", porciones=1, margen_pct=Decimal('180.0'),
-            ingredientes=[
-                IngredienteCreate(insumo_id=insumo_maiz_pozole.id, cantidad_usada=Decimal('0.250'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_cerdo.id, cantidad_usada=Decimal('0.150'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_chile_guajillo.id, cantidad_usada=Decimal('0.020'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_jitomate.id, cantidad_usada=Decimal('0.050'), unidad="kg")
-            ],
-            pasos=[
-                PasoCreate(orden=1, descripcion="Cocer el maíz hasta que 'floree'", duracion_segundos=7200, es_critico=True),
-                PasoCreate(orden=2, descripcion="Agregar la carne de cerdo troceada", duracion_segundos=3600),
-                PasoCreate(orden=3, descripcion="Preparar el adobo de chiles secos e integrar", duracion_segundos=1200),
-                PasoCreate(orden=4, descripcion="Hervir todo junto para integrar sabores", duracion_segundos=1800)
-            ]
-        ), usuario.id)
-
-        # --- CASO 4: GUACAMOLE ESPECIAL ---
-        receta_guacamole = await RecetaService.create_receta(db, RecetaCreate(
-            nombre="Guacamole Artesanal con Totopos", porciones=2, margen_pct=Decimal('250.0'),
-            ingredientes=[
-                IngredienteCreate(insumo_id=insumo_aguacate.id, cantidad_usada=Decimal('0.400'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_jitomate.id, cantidad_usada=Decimal('0.080'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_cebolla.id, cantidad_usada=Decimal('0.040'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_chile_serrano.id, cantidad_usada=Decimal('0.010'), unidad="kg"),
-                IngredienteCreate(insumo_id=insumo_tortilla.id, cantidad_usada=Decimal('0.100'), unidad="kg")
-            ],
-            pasos=[
-                PasoCreate(orden=1, descripcion="Picar finamente jitomate, cebolla y chile", duracion_segundos=300),
-                PasoCreate(orden=2, descripcion="Machacar el aguacate en molcajete", duracion_segundos=180),
-                PasoCreate(orden=3, descripcion="Mezclar ingredientes y ajustar sal", duracion_segundos=60, es_critico=True)
-            ]
-        ), usuario.id)
+        # Gasto fijo de empaque (caja premium)
+        await HiddenCostService.toggle_gasto(db, receta_cheesecake.id, tipo='empaque', activo=True, usuario_id=usuario.id, valor=Decimal('25.00'), es_porcentaje=False)
 
         # ---------------------------------------------------------
         # 4. AGENDA DE PEDIDOS (Operatividad Real)
         # ---------------------------------------------------------
-        print("\n📅 Agendando Pedidos de Antojitos Mexicanos...")
-        ahora = datetime.now(timezone.utc)
+        print("\nAgendando Pedidos de Reposteria...")
 
-        # CASO A: Pedido Pendiente (Taquiza para mañana)
-        pedido_mañana = await PedidoService.create_pedido(db, PedidoCreate(
-            cliente_nombre="Juan Pérez",
-            cliente_whatsapp="5512345678",
-            fecha_entrega=datetime.now(timezone.utc) + timedelta(days=1),
-            punto_entrega="Domicilio Particular",
-            notas="Sin picante en los chilaquiles por favor.",
+        # CASO A: Pedido Pendiente (Para un evento el fin de semana)
+        pedido_pendiente = await PedidoService.create_pedido(db, PedidoCreate(
+            cliente_nombre="Ana Martínez",
+            cliente_whatsapp="5512348899",
+            fecha_entrega=datetime.now(timezone.utc) + timedelta(days=3),
+            punto_entrega="Salón de Eventos 'La Fiesta'",
+            notas="Entregar a las 4 PM. Etiquetar como postre sin nueces.",
             lineas=[
-                LineaPedidoCreate(nombre_producto="Orden de Tacos al Pastor", cantidad_porciones=10,
-                                  precio_acordado_mxn=Decimal('950.00'), receta_id=receta_pastor.id),
-                LineaPedidoCreate(nombre_producto="Guacamole Grande", cantidad_porciones=2,
-                                  precio_acordado_mxn=Decimal('280.00'), receta_id=receta_guacamole.id)
+                LineaPedidoCreate(nombre_producto="Flan Napolitano", cantidad_porciones=16, # 2 flanes
+                                  precio_acordado_mxn=Decimal('600.00'), receta_id=receta_flan.id),
+                LineaPedidoCreate(nombre_producto="Cheesecake Especial", cantidad_porciones=10,
+                                  precio_acordado_mxn=Decimal('550.00'), receta_id=receta_cheesecake.id)
             ]
         ), usuario.id)
-        print(f"✅ Pedido PENDIENTE creado para mañana (Cliente: {pedido_mañana.cliente_nombre})")
+        print(f"OK: Pedido PENDIENTE creado (Cliente: {pedido_pendiente.cliente_nombre})")
 
-        # CASO B: Pedido En Preparación (Desayuno de oficina)
+        # CASO B: Pedido En Preparación (Para hoy en la tarde)
         pedido_hoy = await PedidoService.create_pedido(db, PedidoCreate(
-            cliente_nombre="Oficina Tech Solutions",
-            cliente_whatsapp="5587654321",
-            fecha_entrega=datetime.now(timezone.utc) + timedelta(days=1),
-            punto_entrega="Recepción Corporativo",
+            cliente_nombre="Cafetería El Grano",
+            cliente_whatsapp="5587650011",
+            fecha_entrega=datetime.now(timezone.utc) + timedelta(hours=5),
+            punto_entrega="Local de la Cafetería",
             lineas=[
-                LineaPedidoCreate(nombre_producto="Chilaquiles Verdes con Pollo", cantidad_porciones=15,
-                                  precio_acordado_mxn=Decimal('2250.00'), receta_id=receta_chilaquiles.id)
+                LineaPedidoCreate(nombre_producto="Pastel de Chocolate Húmedo", cantidad_porciones=24, # 2 pasteles
+                                  precio_acordado_mxn=Decimal('1100.00'), receta_id=receta_pastel_choc.id)
             ]
         ), usuario.id)
         await PedidoService.cambiar_estado(db, pedido_hoy.id, "en_preparacion", usuario.id)
-        print(f"✅ Pedido EN PREPARACIÓN creado para hoy (Cliente: {pedido_hoy.cliente_nombre})")
+        print(f"OK: Pedido EN PREPARACION creado (Cliente: {pedido_hoy.cliente_nombre})")
 
-        # CASO C: Pedido Entregado (Noche Mexicana)
-        pedido_cerrado = await PedidoService.create_pedido(db, PedidoCreate(
-            cliente_nombre="Maria Garcia",
-            cliente_whatsapp="5599887766",
-            fecha_entrega=datetime.now(timezone.utc) + timedelta(days=1),
-            lineas=[
-                LineaPedidoCreate(nombre_producto="Pozole Rojo de Cerdo", cantidad_porciones=5,
-                                  precio_acordado_mxn=Decimal('750.00'), receta_id=receta_pozole.id)
-            ]
-        ), usuario.id)
-        await PedidoService.cambiar_estado(db, pedido_cerrado.id, "en_preparacion", usuario.id)
-        await PedidoService.cambiar_estado(db, pedido_cerrado.id, "listo", usuario.id)
-        await PedidoService.cambiar_estado(db, pedido_cerrado.id, "entregado", usuario.id)
-        print(f"✅ Pedido ENTREGADO creado (Noche Mexicana)")
+        # CASO C: Pedido Entregado (Venta de ayer)
+        pedido_entregado_db = Pedido(
+            usuario_id=usuario.id,
+            cliente_nombre="Carlos Ruiz",
+            cliente_whatsapp="5599881122",
+            fecha_entrega=datetime.now(timezone.utc) - timedelta(days=1),
+            estado="entregado",  # Lo forzamos directo a entregado
+            punto_entrega="Recoger en Local"
+        )
+        db.add(pedido_entregado_db)
+        await db.flush()
 
-        print("\n🚀 ¡Viva México! Base de Datos de Kitchy lista para pruebas.")
+        linea_historica = LineaPedido(
+            pedido_id=pedido_entregado_db.id,
+            receta_id=receta_flan.id,
+            nombre_producto="Flan Napolitano",
+            cantidad_porciones=8,
+            precio_acordado_mxn=Decimal('320.00')
+        )
+        db.add(linea_historica)
+        await db.commit()
+
+        print(f"OK: Pedido ENTREGADO creado (Historico insertado por DB directo)")
+
+        print("\nLa reposteria esta lista! Base de datos de Kitchy sembrada con exito.")
 
 if __name__ == "__main__":
     asyncio.run(seed_database())
