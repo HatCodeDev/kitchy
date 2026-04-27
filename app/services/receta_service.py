@@ -79,9 +79,22 @@ class RecetaService:
                 receta.ingredientes.append(nuevo_ing)
 
         if "pasos" in update_data:
+            # 1. Vaciamos la lista actual
             receta.pasos.clear()
-            for paso in update_data["pasos"]:
-                nuevo_paso = PasoReceta(receta_id=receta.id, **paso)
+
+            # 2. Obligamos a la BD a ejecutar los DELETE (Evita el Error de UniqueConstraint en pasos)
+            await db.flush()
+
+            # 3. Insertamos los nuevos
+            for paso_dict in update_data["pasos"]:
+                # Asignación EXPLÍCITA para evitar el 500 por inyección de llaves
+                nuevo_paso = PasoReceta(
+                    receta_id=receta.id,
+                    orden=paso_dict["orden"],
+                    descripcion=paso_dict["descripcion"],
+                    duracion_segundos=paso_dict.get("duracion_segundos"),
+                    es_critico=paso_dict.get("es_critico", False)
+                )
                 receta.pasos.append(nuevo_paso)
 
         await db.commit()
