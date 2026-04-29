@@ -6,6 +6,7 @@ from uuid import UUID
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import User
+from app.models.receta import Receta  # <-- Importante para el tipado del helper
 from app.schemas.receta import (
     RecetaCreate,
     RecetaResponse,
@@ -19,13 +20,25 @@ from app.services.hidden_cost_service import HiddenCostService
 
 router = APIRouter()
 
+# HELPER DE CONSISTENCIA FINANCIERA
+async def inyectar_costos_a_receta(receta: Receta, db: AsyncSession, usuario_id: UUID) -> Receta:
+    """Helper para enriquecer el objeto Receta con el motor financiero antes de responder."""
+    costos = await RecetaService.calcular_costeo(db, receta.id, usuario_id)
+    setattr(receta, 'costo_por_porcion', costos['costo_por_porcion'])
+    setattr(receta, 'precio_sugerido', costos['precio_sugerido'])
+    return receta
+
+# ENDPOINTS
+
 @router.get("/", response_model=List[RecetaResponse])
 async def get_recetas(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Lista las recetas activas del usuario."""
-    return await RecetaService.get_all(db, current_user.id)
+    """Lista las recetas activas del usuario con sus precios calculados."""
+    recetas = await RecetaService.get_all(db, current_user.id)
+    # Enriquecemos toda la lista usando el helper
+    return [await inyectar_costos_a_receta(r, db, current_user.id) for r in recetas]
 
 @router.post("/", response_model=RecetaResponse, status_code=status.HTTP_201_CREATED)
 async def create_receta(
@@ -34,7 +47,9 @@ async def create_receta(
     current_user: User = Depends(get_current_user)
 ):
     """Crea una receta con ingredientes, pasos y gastos por defecto en una sola transacción."""
-    return await RecetaService.create_receta(db, data, current_user.id)
+    receta = await RecetaService.create_receta(db, data, current_user.id)
+    # Enriquecemos la receta recién creada
+    return await inyectar_costos_a_receta(receta, db, current_user.id)
 
 @router.get("/{id}", response_model=RecetaResponse)
 async def get_receta(
@@ -42,8 +57,10 @@ async def get_receta(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Obtiene el detalle completo de una receta."""
-    return await RecetaService.get_by_id(db, id, current_user.id)
+    """Obtiene el detalle completo de una receta y sus costos calculados."""
+    receta = await RecetaService.get_by_id(db, id, current_user.id)
+    # Enriquecemos la receta consultada
+    return await inyectar_costos_a_receta(receta, db, current_user.id)
 
 @router.put("/{id}", response_model=RecetaResponse)
 async def update_receta(
@@ -52,9 +69,10 @@ async def update_receta(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Actualiza datos básicos de la receta (nombre, porciones, margen)."""
-    update_data = data.model_dump(exclude_unset=True)
-    return await RecetaService.update_receta(db, id, update_data, current_user.id)
+    """Actualiza datos básicos de la receta y sus relaciones (ingredientes/pasos)."""
+    receta = await RecetaService.update_receta(db, id, data, current_user.id)
+    # Enriquecemos la receta después de actualizarla
+    return await inyectar_costos_a_receta(receta, db, current_user.id)
 
 @router.delete("/{id}")
 async def delete_receta(
@@ -83,8 +101,6 @@ async def upsert_gasto_oculto(
     current_user: User = Depends(get_current_user)
 ):
     """Crea o actualiza los valores (monto/porcentaje) de un gasto oculto."""
-    # Reutilizamos el método toggle_gasto que armamos en la E6-09,
-    # pasándole los valores completos del schema.
     return await HiddenCostService.toggle_gasto(
         db=db,
         receta_id=id,

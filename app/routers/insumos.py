@@ -8,7 +8,7 @@ from app.core.dependencies import get_current_user
 from app.models.user import User
 
 from app.schemas.insumo import InsumoCreate, InsumoUpdate, InsumoResponse
-from app.schemas.movimiento_insumo import MovimientoCreate
+from app.schemas.movimiento_insumo import MovimientoCreate, MovimientoResponse
 from app.services.insumo_service import InsumoService
 
 # Inicializamos el router. El prefijo se define en main.py, así que aquí lo dejamos vacío.
@@ -69,3 +69,13 @@ async def registrar_movimiento(
 ):
     """Registra una entrada o salida de inventario transaccionalmente."""
     return await InsumoService.registrar_movimiento(db, insumo_id=id, data=data, usuario_id=current_user.id)
+
+@router.get("/{id}/movimientos", response_model=List[MovimientoResponse])
+async def get_historial_movimientos(
+    id: UUID,
+    limit: int = 5, # Por defecto devolvemos los últimos 5
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Obtiene el historial de entradas y salidas de un insumo específico."""
+    return await InsumoService.get_movimientos(db, insumo_id=id, usuario_id=current_user.id, limit=limit)
