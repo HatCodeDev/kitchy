@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Escanea las dependencias de Python (FastAPI, SQLAlchemy, etc.) en requirements.txt
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5 # Evita que te inunde con demasiadas PRs de golpe
+
+  # Escanea la imagen base de tu Dockerfile (python:3.12-slim)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
