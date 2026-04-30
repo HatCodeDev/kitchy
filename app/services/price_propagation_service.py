@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from decimal import Decimal
 
 from app.models.receta import Receta
 from app.models.insumo import Insumo
@@ -44,17 +45,18 @@ class PricePropagationService:
             # Preparar datos para el cálculo
             # Necesitamos los precios actuales de TODOS los insumos de esta receta
             ids_insumos = [ing.insumo_id for ing in receta.ingredientes]
-            precios_query = select(Insumo.id, Insumo.precio_compra, Insumo.cantidad_comprada).where(
+            precios_query = select(Insumo.id, Insumo.precio_compra, Insumo.cantidad_comprada, Insumo.unidad).where(
                 Insumo.id.in_(ids_insumos))
             precios_result = await db.execute(precios_query)
 
-            # Mapeamos a un diccionario de {id: precio_unitario}
+            # Mapeamos a un diccionario esperado por el CostCalculationService
             mapa_precios = {}
             for row in precios_result:
-                # Calculamos el unitario al vuelo (o usamos la property si el objeto está cargado)
-                # Para eficiencia en query, lo hacemos manual:
-                unitario = row.precio_compra / row.cantidad_comprada if row.cantidad_comprada > 0 else 0
-                mapa_precios[row.id] = unitario
+                unitario = row.precio_compra / row.cantidad_comprada if row.cantidad_comprada > 0 else Decimal('0.00')
+                mapa_precios[row.id] = {
+                    "precio_unitario": unitario,
+                    "unidad_compra": row.unidad
+                }
 
             # Mapear Gastos Ocultos
             mapa_gastos = {g.tipo: g for g in receta.gastos_ocultos if g.activo}
