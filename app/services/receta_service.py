@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
+from decimal import Decimal
 
 from app.models.receta import Receta
 from app.models.ingrediente_receta import IngredienteReceta
@@ -145,14 +146,17 @@ class RecetaService:
 
         # Obtener precios de insumos en una sola query
         ids_insumos = [ing.insumo_id for ing in receta.ingredientes]
-        precios_query = select(Insumo.id, Insumo.precio_compra, Insumo.cantidad_comprada).where(
+        precios_query = select(Insumo.id, Insumo.precio_compra, Insumo.cantidad_comprada, Insumo.unidad).where(
             Insumo.id.in_(ids_insumos))
         precios_result = await db.execute(precios_query)
 
         mapa_precios = {}
         for row in precios_result:
-            unitario = row.precio_compra / row.cantidad_comprada if row.cantidad_comprada > 0 else 0
-            mapa_precios[row.id] = unitario
+            unitario = row.precio_compra / row.cantidad_comprada if row.cantidad_comprada > 0 else Decimal('0.00')
+            mapa_precios[row.id] = {
+                "precio_unitario": unitario,
+                "unidad_compra": row.unidad
+            }
 
         # Obtener gastos con lógica de Fallback (Específico vs Global)
         gastos = await HiddenCostService.get_gastos_para_receta(db, receta.id, usuario_id)

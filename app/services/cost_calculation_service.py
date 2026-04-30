@@ -4,6 +4,7 @@ from uuid import UUID
 
 from app.models.receta import Receta
 from app.models.gasto_oculto import GastoOculto
+from app.services.unit_conversion_service import UnitConversionService
 
 
 class CostCalculationService:
@@ -15,7 +16,7 @@ class CostCalculationService:
     @staticmethod
     def calcular_costo(
             receta: Receta,
-            insumos_precios: Dict[UUID, Decimal],
+            insumos_precios: Dict[UUID, Dict[str, Any]],
             gastos_ocultos: Dict[str, GastoOculto]
     ) -> Dict[str, Any]:
         """
@@ -24,9 +25,22 @@ class CostCalculationService:
         # Costo Base: Insumos
         costo_insumos = Decimal('0.00')
         for ingrediente in receta.ingredientes:
-            # Obtenemos el precio unitario del diccionario inyectado
-            precio_unitario = insumos_precios.get(ingrediente.insumo_id, Decimal('0.00'))
-            costo_insumos += precio_unitario * ingrediente.cantidad_usada
+            # Obtenemos la info del insumo inyectada
+            info_insumo = insumos_precios.get(ingrediente.insumo_id)
+            if not info_insumo:
+                continue
+                
+            precio_unitario = info_insumo["precio_unitario"]
+            unidad_compra = info_insumo["unidad_compra"]
+            
+            # Convertimos la cantidad usada a la unidad de compra
+            cantidad_convertida = UnitConversionService.convertir(
+                cantidad=ingrediente.cantidad_usada,
+                unidad_origen=ingrediente.unidad,
+                unidad_destino=unidad_compra
+            )
+            
+            costo_insumos += precio_unitario * cantidad_convertida
 
         # Gastos Ocultos (Empaque y Energía)
         costo_empaque = Decimal('0.00')

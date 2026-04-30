@@ -7,8 +7,10 @@ from fastapi import HTTPException, status
 
 from app.models.pedido import Pedido
 from app.models.receta import Receta
+from app.models.ingrediente_receta import IngredienteReceta
 from app.schemas.movimiento_insumo import MovimientoCreate
 from app.services.insumo_service import InsumoService
+from app.services.unit_conversion_service import UnitConversionService
 
 
 class ProduccionService:
@@ -40,7 +42,7 @@ class ProduccionService:
             query_receta = select(Receta).where(
                 Receta.id == linea.receta_id,
                 Receta.usuario_id == usuario_id
-            ).options(selectinload(Receta.ingredientes))
+            ).options(selectinload(Receta.ingredientes).selectinload(IngredienteReceta.insumo))
 
             result_receta = await db.execute(query_receta)
             receta = result_receta.scalar_one_or_none()
@@ -57,7 +59,14 @@ class ProduccionService:
 
             # Descontar cada ingrediente usando el InsumoService (que ya tiene la validación de stock y creación de historial)
             for ingrediente in receta.ingredientes:
-                cantidad_a_descontar = ingrediente.cantidad_usada * factor_multiplicacion
+                cantidad_en_receta = ingrediente.cantidad_usada * factor_multiplicacion
+                
+                # Convertir la cantidad a la unidad en la que se compró/almacenó el insumo
+                cantidad_a_descontar = UnitConversionService.convertir(
+                    cantidad=cantidad_en_receta,
+                    unidad_origen=ingrediente.unidad,
+                    unidad_destino=ingrediente.insumo.unidad
+                )
 
                 movimiento_data = MovimientoCreate(
                     tipo='salida',
