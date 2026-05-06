@@ -168,10 +168,14 @@ class InsumoService:
         # Si el stock actual cruzó la línea del mínimo, disparamos la alerta.
         if insumo.cantidad_actual <= insumo.alerta_minimo:
             # Crear NotificacionProgramada (Épica E9-01)
-            # from app.models.notificacion import NotificacionProgramada
-            # alerta = NotificacionProgramada(tipo='alerta_desabasto', insumo_id=insumo_id...)
-            # db.add(alerta)
-            pass
+            from app.models.notificacion_programada import NotificacionProgramada
+            alerta = NotificacionProgramada(
+                usuario_id=usuario_id,
+                insumo_id=insumo_id,
+                tipo='alerta_desabasto',
+                fecha_programada=datetime.now(timezone.utc)
+            )
+            db.add(alerta)
 
         # g. Guardar la transacción
         # Al hacer commit aquí, SQLAlchemy guarda la actualización del Insumo y la

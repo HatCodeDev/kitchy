@@ -3,11 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
 
-from app.routers import auth, users, insumos, recetas, pedidos, temporizadores
+from app.routers import auth, users, insumos, recetas, pedidos, temporizadores, notificaciones
+from app.jobs.notificacion_job import procesar_notificaciones_loop
+import asyncio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Iniciamos el Job de background para notificaciones (E9-03)
+    notif_task = asyncio.create_task(procesar_notificaciones_loop())
     yield
+    # Limpieza: Cancelamos el job al cerrar la app
+    notif_task.cancel()
+    try:
+        await notif_task
+    except asyncio.CancelledError:
+        pass
 
 tags_metadata = [
     {
@@ -54,6 +64,8 @@ app.include_router(insumos.router, prefix="/api/v1/insumos", tags=["Insumos"])
 app.include_router(recetas.router, prefix="/api/v1/recetas", tags=["Recetas"])
 app.include_router(pedidos.router, prefix="/api/v1/pedidos", tags=["Pedidos"])
 app.include_router(temporizadores.router, prefix="/api/v1/temporizadores", tags=["Temporizadores"])
+app.include_router(notificaciones.router, prefix="/api/v1/notificaciones", tags=["Notificaciones"])
+
 @app.get("/", tags=["Health Check"])
 def health_check():
     return {
