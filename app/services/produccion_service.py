@@ -68,6 +68,11 @@ class ProduccionService:
                     unidad_destino=ingrediente.insumo.unidad
                 )
 
+                # Si el insumo se maneja en piezas enteras, redondeamos hacia arriba (Ceil)
+                # para asegurar que el descuento sea de piezas completas.
+                if UnitConversionService.es_unidad_discreta(ingrediente.insumo.unidad):
+                    cantidad_a_descontar = cantidad_a_descontar.to_integral_value(rounding='ROUND_CEILING')
+
                 movimiento_data = MovimientoCreate(
                     tipo='salida',
                     cantidad=cantidad_a_descontar,

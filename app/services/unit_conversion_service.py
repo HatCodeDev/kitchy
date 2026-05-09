@@ -41,6 +41,15 @@ class UnitConversionService:
         'hr': Decimal('3600'),
     }
 
+    DISCRETE_UNITS = {'pza', 'pzas', 'pieza', 'piezas', 'unidad', 'unidades'}
+
+    @staticmethod
+    def es_unidad_discreta(unidad: str) -> bool:
+        """Determina si la unidad representa piezas enteras."""
+        if not unidad:
+            return False
+        return unidad.lower().strip() in UnitConversionService.DISCRETE_UNITS
+
     @staticmethod
     def convertir(cantidad: Decimal, unidad_origen: str, unidad_destino: str) -> Decimal:
         """
