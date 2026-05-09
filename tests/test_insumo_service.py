@@ -72,11 +72,33 @@ async def test_get_by_id_lanza_403_para_otro_usuario(mock_db):
     assert "No tienes permiso" in exc_info.value.detail
 
 
-@pytest.mark.skip(reason="TODO E6-05: Se implementará cuando exista el modelo Receta")
 @pytest.mark.asyncio
 async def test_soft_delete_rechaza_si_insumo_en_receta_activa(mock_db):
-    # Test reservado para la Épica 6
-    pass
+    usuario_id = uuid4()
+    insumo_id = uuid4()
+
+    # 1. Simulamos que el insumo existe
+    mock_insumo = Insumo(id=insumo_id, usuario_id=usuario_id, activo=True)
+    mock_result_insumo = MagicMock()
+    mock_result_insumo.scalar_one_or_none.return_value = mock_insumo
+    
+    # 2. Simulamos que el insumo SI está en una receta
+    from app.models.ingrediente_receta import IngredienteReceta
+    mock_ingrediente = IngredienteReceta(id=uuid4(), insumo_id=insumo_id)
+    mock_result_uso = MagicMock()
+    mock_result_uso.scalar_one_or_none.return_value = mock_ingrediente
+    
+    # Configuramos el mock_db para que devuelva los resultados en orden
+    mock_db.execute.side_effect = [mock_result_insumo, mock_result_uso]
+
+    # 3. Ejecutamos y verificamos que lance 400
+    with pytest.raises(HTTPException) as exc_info:
+        await InsumoService.soft_delete(mock_db, insumo_id, usuario_id)
+
+    assert exc_info.value.status_code == 400
+    assert "está siendo utilizado" in exc_info.value.detail
+    # Verificamos que NO se haya llamado a commit
+    mock_db.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio

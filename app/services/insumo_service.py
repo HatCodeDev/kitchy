@@ -121,8 +121,16 @@ class InsumoService:
         """
         insumo = await InsumoService.get_by_id(db, insumo_id, usuario_id)
 
-        # Verificar uso en recetas antes de desactivar
-        # query = select(IngredienteReceta).join(Receta).where(...)
+        # Verificar uso en recetas antes de desactivar (RN-05)
+        from app.models.ingrediente_receta import IngredienteReceta
+        query_uso = select(IngredienteReceta).where(IngredienteReceta.insumo_id == insumo_id).limit(1)
+        result_uso = await db.execute(query_uso)
+        
+        if result_uso.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede eliminar el insumo porque está siendo utilizado en una o más recetas."
+            )
 
         insumo.activo = False
         await db.commit()
