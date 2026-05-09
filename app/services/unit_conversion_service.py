@@ -31,6 +31,14 @@ class UnitConversionService:
         # Unidades discretas (base: pza)
         'pza': Decimal('1'),
         'docena': Decimal('12'),
+
+        # Tiempo (base: seg)
+        'seg': Decimal('1'),
+        's': Decimal('1'),
+        'min': Decimal('60'),
+        'm': Decimal('60'),
+        'h': Decimal('3600'),
+        'hr': Decimal('3600'),
     }
 
     @staticmethod

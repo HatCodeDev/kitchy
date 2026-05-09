@@ -13,6 +13,7 @@ from app.models.insumo import Insumo
 from app.schemas.receta import RecetaCreate, RecetaUpdate
 from app.services.hidden_cost_service import HiddenCostService
 from app.services.cost_calculation_service import CostCalculationService
+from app.services.unit_conversion_service import UnitConversionService
 
 
 class RecetaService:
@@ -76,11 +77,21 @@ class RecetaService:
             receta.pasos.clear()
             await db.flush()
             for paso_dict in update_data["pasos"]:
+                duracion_final = paso_dict.get("duracion_segundos")
+                
+                # Si el front mandó duracion + unidad, convertimos
+                if paso_dict.get("duracion") is not None:
+                    duracion_final = int(UnitConversionService.convertir(
+                        cantidad=paso_dict["duracion"],
+                        unidad_origen=paso_dict.get("unidad", "seg"),
+                        unidad_destino="seg"
+                    ))
+
                 nuevo_paso = PasoReceta(
                     receta_id=receta.id,
                     orden=paso_dict["orden"],
                     descripcion=paso_dict["descripcion"],
-                    duracion_segundos=paso_dict.get("duracion_segundos"),
+                    duracion_segundos=duracion_final,
                     es_critico=paso_dict.get("es_critico", False)
                 )
                 receta.pasos.append(nuevo_paso)
@@ -110,9 +121,21 @@ class RecetaService:
             db.add(nuevo_ing)
 
         for paso in data.pasos:
+            duracion_final = paso.duracion_segundos
+            
+            if paso.duracion is not None:
+                duracion_final = int(UnitConversionService.convertir(
+                    cantidad=paso.duracion,
+                    unidad_origen=paso.unidad or "seg",
+                    unidad_destino="seg"
+                ))
+
             nuevo_paso = PasoReceta(
                 receta_id=nueva_receta.id,
-                **paso.model_dump()
+                orden=paso.orden,
+                descripcion=paso.descripcion,
+                duracion_segundos=duracion_final,
+                es_critico=paso.es_critico
             )
             db.add(nuevo_paso)
 
