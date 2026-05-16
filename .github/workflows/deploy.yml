@@ -15,7 +15,9 @@ jobs:
       - name: Pull latest changes
         run: |
           cd /home/vonlunant/workspace-projects/Kitchy/code/kitchy
-          git pull origin main
+          git fetch origin main
+          git reset --hard origin/main
+          git clean -fd
 
       - name: Restart API container
         run: |
