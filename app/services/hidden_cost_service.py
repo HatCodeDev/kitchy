@@ -47,7 +47,6 @@ class HiddenCostService:
         return resultado
 
     @staticmethod
-    @staticmethod
     async def toggle_gasto(
             db: AsyncSession,
             receta_id: UUID,

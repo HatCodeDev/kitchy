@@ -69,9 +69,14 @@ class PedidoService:
             )
             db.add(nueva_linea)
 
-        #  Programar Recordatorio
-        # fecha_recordatorio = data.fecha_entrega - timedelta(hours=2)
-        # NotificacionService.programar(..., fecha_recordatorio)
+        #  Programar Recordatorio (E9-02)
+        from app.services.notificacion_service import NotificacionService
+        await NotificacionService.programar_recordatorio(
+            db=db,
+            pedido_id=nuevo_pedido.id,
+            fecha_entrega=data.fecha_entrega,
+            usuario_id=usuario_id
+        )
 
         await db.commit()
         
@@ -103,6 +108,11 @@ class PedidoService:
         if data.cliente_whatsapp is not None:
             pedido.cliente_whatsapp = data.cliente_whatsapp
         if data.fecha_entrega is not None:
+            # Si la fecha cambia, reprogramamos el recordatorio (E9-02)
+            from app.services.notificacion_service import NotificacionService
+            await NotificacionService.cancelar_recordatorio(db, pedido.id, usuario_id)
+            await NotificacionService.programar_recordatorio(db, pedido.id, data.fecha_entrega, usuario_id)
+            
             pedido.fecha_entrega = data.fecha_entrega
         if data.punto_entrega is not None:
             pedido.punto_entrega = data.punto_entrega

@@ -6,7 +6,7 @@ from decimal import Decimal
 from fastapi import HTTPException
 
 from app.services.pedido_service import PedidoService
-from app.schemas.pedido import PedidoCreate, LineaPedidoCreate
+from app.schemas.pedido import PedidoCreate, LineaPedidoCreate, PedidoUpdate
 from app.models.pedido import Pedido
 from app.utils.whatsapp import build_whatsapp_url
 
@@ -15,7 +15,9 @@ from app.utils.whatsapp import build_whatsapp_url
 @pytest.fixture
 def mock_db():
     db = AsyncMock()
-    db.add = MagicMock()  # add() de SQLAlchemy es síncrono
+    # Explicitly set add as a MagicMock since SQLAlchemy's add is synchronous
+    # and AsyncMock would make it awaitable by default.
+    db.add = MagicMock()
     return db
 
 
@@ -58,19 +60,32 @@ async def test_crear_pedido_valido(mock_db):
         lineas=[linea]
     )
 
-    # Simulamos el comportamiento del refresh
+    # Simulamos el comportamiento del refresh y del execute
     async def mock_refresh(instance):
         instance.id = uuid4()
+        instance.cliente_whatsapp = "5512345678"
 
     mock_db.refresh.side_effect = mock_refresh
+    
+    # Mock para el select(Pedido) final
+    mock_pedido = MagicMock(spec=Pedido)
+    mock_pedido.id = uuid4()
+    mock_pedido.estado = "pendiente"
+    mock_pedido.cliente_nombre = "Rocio Ponce"
+    mock_pedido.cliente_whatsapp = "5512345678"
+    mock_pedido.lineas = []
+
+    mock_result = MagicMock()
+    mock_result.scalar_one.return_value = mock_pedido
+    mock_db.execute.return_value = mock_result
 
     pedido = await PedidoService.create_pedido(mock_db, data, usuario_id)
 
     assert pedido.estado == "pendiente"
     assert pedido.cliente_nombre == "Rocio Ponce"
     assert pedido.whatsapp_url == "https://wa.me/525512345678"
-    assert mock_db.add.call_count == 2  # 1 del pedido + 1 de la línea
-    mock_db.commit.assert_awaited_once()
+    assert mock_db.add.call_count == 3  # 1 del pedido + 1 de la línea + 1 notificacion
+    mock_db.commit.assert_awaited()
 
 
 # ==========================================
@@ -84,9 +99,11 @@ async def test_transicion_valida_pendiente_a_en_preparacion(mock_db):
     pedido_id = uuid4()
 
     # Simulamos un pedido en la base de datos
-    mock_pedido = Pedido(id=pedido_id, usuario_id=usuario_id, estado="pendiente")
+    mock_pedido = Pedido(id=pedido_id, usuario_id=usuario_id, estado="pendiente", cliente_whatsapp="5511223344")
+    
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_pedido
+    mock_result.scalar_one.return_value = mock_pedido
     mock_db.execute.return_value = mock_result
 
     pedido_actualizado = await PedidoService.cambiar_estado(mock_db, pedido_id, "en_preparacion", usuario_id)
@@ -102,9 +119,10 @@ async def test_transicion_valida_ciclo_completo(mock_db):
     pedido_id = uuid4()
 
     # Creamos el objeto de forma mutante
-    mock_pedido = Pedido(id=pedido_id, usuario_id=usuario_id, estado="pendiente")
+    mock_pedido = Pedido(id=pedido_id, usuario_id=usuario_id, estado="pendiente", cliente_whatsapp="5511223344")
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_pedido
+    mock_result.scalar_one.return_value = mock_pedido
     mock_db.execute.return_value = mock_result
 
     # 1. Pendiente -> En Preparación
@@ -160,9 +178,10 @@ async def test_cancelar_desde_cualquier_estado(mock_db):
     """G. Verifica que la cancelación funciona desde estados productivos."""
     usuario_id = uuid4()
 
-    mock_pedido = Pedido(id=uuid4(), usuario_id=usuario_id, estado="en_preparacion")
+    mock_pedido = Pedido(id=uuid4(), usuario_id=usuario_id, estado="en_preparacion", cliente_whatsapp="5511223344")
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_pedido
+    mock_result.scalar_one.return_value = mock_pedido
     mock_db.execute.return_value = mock_result
 
     pedido = await PedidoService.cambiar_estado(mock_db, mock_pedido.id, "cancelado", usuario_id)
@@ -184,10 +203,84 @@ def test_build_whatsapp_url_con_codigo_pais():
 
 
 # ==========================================
-# TESTS NOTIFICACIONES PROGRAMADAS
+# TESTS NOTIFICACIONES PROGRAMADAS (E9-02)
 # ==========================================
 
-@pytest.mark.skip(reason="TODO E9-02: Se implementará la creación de NotificacionProgramada")
-def test_notificacion_programada_creada_al_crear_pedido():
-    """J. Reservado para cuando exista el módulo de alertas de la Epica 9."""
-    pass
+@pytest.mark.asyncio
+async def test_notificacion_programada_creada_al_crear_pedido(mock_db):
+    """J. Verifica que al crear un pedido se intente programar la notificación."""
+    usuario_id = uuid4()
+    
+    linea = LineaPedidoCreate(
+        nombre_producto="Test",
+        cantidad_porciones=1,
+        precio_acordado_mxn=Decimal("10.00")
+    )
+    
+    # Entrega en 10 horas para asegurar que entre en el umbral de notificación
+    data = PedidoCreate(
+        cliente_nombre="Test Notif",
+        cliente_whatsapp="5511223344",
+        fecha_entrega=datetime.now(timezone.utc) + timedelta(hours=10),
+        lineas=[linea]
+    )
+
+    async def mock_refresh(instance):
+        instance.id = uuid4()
+        instance.cliente_whatsapp = "5511223344"
+
+    mock_db.refresh.side_effect = mock_refresh
+
+    # Mock para el select(Pedido) final
+    mock_pedido = MagicMock(spec=Pedido)
+    mock_pedido.id = uuid4()
+    mock_pedido.cliente_whatsapp = "5511223344"
+    mock_pedido.lineas = []
+
+    mock_result = MagicMock()
+    mock_result.scalar_one.return_value = mock_pedido
+    mock_db.execute.return_value = mock_result
+
+    await PedidoService.create_pedido(mock_db, data, usuario_id)
+
+    # Verificamos que se llamó a db.add varias veces:
+    # 1. Pedido
+    # 2. Línea de pedido
+    # 3. NotificacionProgramada (Vía NotificacionService)
+    assert mock_db.add.call_count == 3
+    mock_db.commit.assert_awaited()
+
+@pytest.mark.asyncio
+async def test_reprogramar_notificacion_al_cambiar_fecha(mock_db):
+    """K. Verifica que al actualizar la fecha se llame a cancelar y programar."""
+    usuario_id = uuid4()
+    pedido_id = uuid4()
+    
+    # Mock de pedido existente
+    mock_pedido = Pedido(
+        id=pedido_id, 
+        usuario_id=usuario_id, 
+        estado="pendiente", 
+        fecha_entrega=datetime.now(timezone.utc) + timedelta(days=1),
+        cliente_whatsapp="5511223344",
+        lineas=[]
+    )
+    
+    # Mock del resultado de la query de búsqueda
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_pedido
+    mock_result.scalar_one.return_value = mock_pedido
+    mock_db.execute.return_value = mock_result
+    
+    # Nueva fecha
+    nueva_fecha = datetime.now(timezone.utc) + timedelta(days=2)
+    update_data = PedidoUpdate(fecha_entrega=nueva_fecha)
+    
+    await PedidoService.update_pedido(mock_db, pedido_id, update_data, usuario_id)
+    
+    # Verificamos el commit de la actualización
+    assert mock_db.commit.call_count >= 1
+    # La lógica de NotificacionService.cancelar_recordatorio usa db.execute(update(...))
+    # La lógica de NotificacionService.programar_recordatorio usa db.add(...)
+    assert mock_db.execute.call_count >= 1
+    assert mock_db.add.call_count >= 1

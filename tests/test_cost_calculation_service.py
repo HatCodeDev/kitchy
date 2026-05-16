@@ -1,7 +1,7 @@
 import pytest
 import uuid
 from decimal import Decimal
-from typing import Dict
+from typing import Dict, Any
 
 from app.models.receta import Receta
 from app.models.ingrediente_receta import IngredienteReceta
@@ -12,10 +12,16 @@ from app.services.cost_calculation_service import CostCalculationService
 # --- FIXTURES (Datos de prueba reutilizables) ---
 
 @pytest.fixture
-def insumos_precios() -> Dict[uuid.UUID, Decimal]:
+def insumos_precios() -> Dict[uuid.UUID, Dict[str, Any]]:
     return {
-        uuid.UUID('11111111-1111-1111-1111-111111111111'): Decimal('10.00'),  # Insumo 1: $10.00 c/u
-        uuid.UUID('22222222-2222-2222-2222-222222222222'): Decimal('25.50')  # Insumo 2: $25.50 c/u
+        uuid.UUID('11111111-1111-1111-1111-111111111111'): {
+            "precio_unitario": Decimal('10.00'),
+            "unidad_compra": "pza"
+        },
+        uuid.UUID('22222222-2222-2222-2222-222222222222'): {
+            "precio_unitario": Decimal('25.50'),
+            "unidad_compra": "pza"
+        }
     }
 
 
@@ -23,11 +29,13 @@ def insumos_precios() -> Dict[uuid.UUID, Decimal]:
 def receta_base() -> Receta:
     ingrediente1 = IngredienteReceta(
         insumo_id=uuid.UUID('11111111-1111-1111-1111-111111111111'),
-        cantidad_usada=Decimal('2.0')  # 2 x $10.00 = $20.00
+        cantidad_usada=Decimal('2.0'),  # 2 x $10.00 = $20.00
+        unidad='pza'
     )
     ingrediente2 = IngredienteReceta(
         insumo_id=uuid.UUID('22222222-2222-2222-2222-222222222222'),
-        cantidad_usada=Decimal('1.0')  # 1 x $25.50 = $25.50
+        cantidad_usada=Decimal('1.0'),  # 1 x $25.50 = $25.50
+        unidad='pza'
     )
     # Costo total insumos esperado: $45.50
     return Receta(

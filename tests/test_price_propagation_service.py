@@ -23,7 +23,7 @@ async def test_propagar_recalcula_solo_recetas_del_usuario():
         porciones=1,
         margen_pct=Decimal('30.0'),
         activa=True,
-        ingredientes=[IngredienteReceta(insumo_id=insumo_id, cantidad_usada=Decimal('1.0'))],
+        ingredientes=[IngredienteReceta(insumo_id=insumo_id, cantidad_usada=Decimal('1.0'), unidad='pza')],
         gastos_ocultos=[]
     )
 
@@ -36,6 +36,7 @@ async def test_propagar_recalcula_solo_recetas_del_usuario():
     mock_row.id = insumo_id
     mock_row.precio_compra = Decimal('100.00')
     mock_row.cantidad_comprada = Decimal('1.00')
+    mock_row.unidad = 'pza'
     mock_result_precios.__iter__.return_value = [mock_row]
 
     # Configuramos el mock de DB para devolver los resultados en orden
@@ -72,7 +73,7 @@ async def test_notificacion_creada_cuando_margen_en_riesgo(mock_logger):
         porciones=1,
         margen_pct=Decimal('0.0'),
         activa=True,
-        ingredientes=[IngredienteReceta(insumo_id=insumo_id, cantidad_usada=Decimal('1.0'))],
+        ingredientes=[IngredienteReceta(insumo_id=insumo_id, cantidad_usada=Decimal('1.0'), unidad='pza')],
         gastos_ocultos=[]
     )
 

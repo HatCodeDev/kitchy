@@ -24,6 +24,8 @@ class PasoCreate(BaseModel):
     """Schema para los pasos del procedimiento"""
     orden: int = Field(..., gt=0, description="Número de paso (1, 2, 3...)")
     descripcion: str = Field(..., min_length=5, description="Instrucciones del paso")
+    duracion: Optional[Decimal] = Field(default=None, ge=0)
+    unidad: Optional[str] = Field(default="seg", description="Unidad de tiempo (seg, min, hr)")
     duracion_segundos: Optional[int] = Field(default=None, ge=0)
     es_critico: bool = Field(default=False)
 

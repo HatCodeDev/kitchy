@@ -21,6 +21,7 @@ from app.models.gasto_oculto import GastoOculto
 from app.models.paso_receta import PasoReceta
 from app.models.pedido import Pedido
 from app.models.linea_pedido import LineaPedido
+from app.models.temporizador import Temporizador
 
 config = context.config
 

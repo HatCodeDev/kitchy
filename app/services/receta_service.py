@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
+from decimal import Decimal
 
 from app.models.receta import Receta
 from app.models.ingrediente_receta import IngredienteReceta
@@ -12,6 +13,7 @@ from app.models.insumo import Insumo
 from app.schemas.receta import RecetaCreate, RecetaUpdate
 from app.services.hidden_cost_service import HiddenCostService
 from app.services.cost_calculation_service import CostCalculationService
+from app.services.unit_conversion_service import UnitConversionService
 
 
 class RecetaService:
@@ -75,11 +77,21 @@ class RecetaService:
             receta.pasos.clear()
             await db.flush()
             for paso_dict in update_data["pasos"]:
+                duracion_final = paso_dict.get("duracion_segundos")
+                
+                # Si el front mandó duracion + unidad, convertimos
+                if paso_dict.get("duracion") is not None:
+                    duracion_final = int(UnitConversionService.convertir(
+                        cantidad=paso_dict["duracion"],
+                        unidad_origen=paso_dict.get("unidad", "seg"),
+                        unidad_destino="seg"
+                    ))
+
                 nuevo_paso = PasoReceta(
                     receta_id=receta.id,
                     orden=paso_dict["orden"],
                     descripcion=paso_dict["descripcion"],
-                    duracion_segundos=paso_dict.get("duracion_segundos"),
+                    duracion_segundos=duracion_final,
                     es_critico=paso_dict.get("es_critico", False)
                 )
                 receta.pasos.append(nuevo_paso)
@@ -109,9 +121,21 @@ class RecetaService:
             db.add(nuevo_ing)
 
         for paso in data.pasos:
+            duracion_final = paso.duracion_segundos
+            
+            if paso.duracion is not None:
+                duracion_final = int(UnitConversionService.convertir(
+                    cantidad=paso.duracion,
+                    unidad_origen=paso.unidad or "seg",
+                    unidad_destino="seg"
+                ))
+
             nuevo_paso = PasoReceta(
                 receta_id=nueva_receta.id,
-                **paso.model_dump()
+                orden=paso.orden,
+                descripcion=paso.descripcion,
+                duracion_segundos=duracion_final,
+                es_critico=paso.es_critico
             )
             db.add(nuevo_paso)
 
@@ -145,14 +169,17 @@ class RecetaService:
 
         # Obtener precios de insumos en una sola query
         ids_insumos = [ing.insumo_id for ing in receta.ingredientes]
-        precios_query = select(Insumo.id, Insumo.precio_compra, Insumo.cantidad_comprada).where(
+        precios_query = select(Insumo.id, Insumo.precio_compra, Insumo.cantidad_comprada, Insumo.unidad).where(
             Insumo.id.in_(ids_insumos))
         precios_result = await db.execute(precios_query)
 
         mapa_precios = {}
         for row in precios_result:
-            unitario = row.precio_compra / row.cantidad_comprada if row.cantidad_comprada > 0 else 0
-            mapa_precios[row.id] = unitario
+            unitario = row.precio_compra / row.cantidad_comprada if row.cantidad_comprada > 0 else Decimal('0.00')
+            mapa_precios[row.id] = {
+                "precio_unitario": unitario,
+                "unidad_compra": row.unidad
+            }
 
         # Obtener gastos con lógica de Fallback (Específico vs Global)
         gastos = await HiddenCostService.get_gastos_para_receta(db, receta.id, usuario_id)
