@@ -16,6 +16,7 @@ class Pedido(Base):
     cliente_whatsapp = Column(String(20), nullable=True)
     fecha_entrega = Column(DateTime(timezone=True), nullable=False)
     punto_entrega = Column(String(255), nullable=True)
+    punto_entrega_id = Column(UUID(as_uuid=True), ForeignKey("puntos_entrega.id", ondelete="SET NULL"), nullable=True)
 
     # Máquina de Estados blindada
     estado = Column(String(25), default='pendiente', nullable=False)
@@ -37,3 +38,4 @@ class Pedido(Base):
     # Relaciones
     usuario = relationship("User", backref="pedidos")
     lineas = relationship("LineaPedido", back_populates="pedido", cascade="all, delete-orphan")
+    punto_entrega_rel = relationship("PuntoEntrega", back_populates="pedidos")

@@ -23,6 +23,13 @@ class LineaPedidoResponse(LineaPedidoCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ColisionHoraResponse(BaseModel):
+    """Respuesta para el chequeo de colisión de horarios"""
+    hay_colision: bool
+    cantidad: int
+    hora_inicio: str
+    hora_fin: str
+
 # SCHEMAS DE PEDIDO
 
 class PedidoCreate(BaseModel):
@@ -32,6 +39,7 @@ class PedidoCreate(BaseModel):
     cliente_whatsapp: Optional[str] = Field(default=None, pattern=r'^[0-9]{10}$')
     fecha_entrega: datetime
     punto_entrega: Optional[str] = Field(default=None, max_length=255)
+    punto_entrega_id: Optional[UUID] = Field(default=None, description="FK a PuntoEntrega")
     notas: Optional[str] = None
 
     # Exige al menos 1 línea (no se puede crear un pedido vacío)
@@ -56,6 +64,7 @@ class PedidoUpdate(BaseModel):
     cliente_whatsapp: Optional[str] = Field(default=None, pattern=r'^[0-9]{10}$')
     fecha_entrega: Optional[datetime] = None
     punto_entrega: Optional[str] = Field(default=None, max_length=255)
+    punto_entrega_id: Optional[UUID] = Field(default=None, description="FK a PuntoEntrega")
     notas: Optional[str] = None
     lineas: Optional[List[LineaPedidoCreate]] = None
 
@@ -87,7 +96,9 @@ class PedidoResponse(BaseModel):
     # Anidamos las líneas mapeadas de la DB
     lineas: List[LineaPedidoResponse]
 
-    # Campo computado que llenaremos en el Router usando utils
+    # Campos computados que llenaremos en el Service
     whatsapp_url: Optional[str] = None
+    punto_entrega_display: Optional[str] = None
+    punto_entrega_direccion: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

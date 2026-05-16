@@ -1,0 +1,68 @@
+schema: sdd-state
+change_name: warning-pedidos-misma-hora
+project: Kitchy
+archived_at: "2026-05-15T00:00:00Z"
+artifact_store_mode: hybrid
+
+# Phase completion status
+phases:
+  explore: completed
+  propose: completed
+  spec: completed
+  design: completed
+  tasks: completed
+  apply: completed
+  verify: completed
+  archive: completed
+
+# Verification status
+verification_status: PASS_WITH_WARNINGS
+critical_issues: 0
+warnings: 3
+warning_details:
+  - id: W1
+    type: timezone-warning
+    severity: medium
+    description: date_trunc without explicit AT TIME ZONE 'UTC' — safe in Docker, risky in non-UTC production
+    status: known-acceptable
+
+  - id: W2
+    type: ux-wording
+    severity: minor
+    description: Button label "Sí, guardar" vs spec "Guardar de todas formas" — minor UX difference
+    status: known-acceptable
+
+  - id: W3
+    type: artifact-tracking
+    severity: minor
+    description: tasks.md not updated with [x] marks during apply — tracking issue, not functional
+    status: known-acceptable
+
+# Archive location (openspec)
+archive_path: openspec/changes/archive/2026-05-15-warning-pedidos-misma-hora/
+
+# Engram artifact references
+engram_artifacts:
+  explore: sdd/warning-pedidos-misma-hora/explore
+  proposal: sdd/warning-pedidos-misma-hora/proposal
+  spec: sdd/warning-pedidos-misma-hora/spec
+  design: sdd/warning-pedidos-misma-hora/design
+  tasks: sdd/warning-pedidos-misma-hora/tasks
+  verify_report: sdd/warning-pedidos-misma-hora/verify-report
+  archive_report: sdd/warning-pedidos-misma-hora/archive-report
+
+# Implementation summary
+implementation:
+  backend:
+    - service_method: pedido_service.check_colision_hora()
+    - schema: pedido.ColisionHoraResponse
+    - endpoint: GET /api/v1/pedidos/check-colision
+
+  mobile:
+    - method: nuevo_pedido_screen._checkColision()
+    - dialog: _showColisionDialog()
+    - test: test/pedido_collision_test.dart
+
+# Rollback plan (documented)
+rollback_feasible: true
+estimated_rollback_time_minutes: 15

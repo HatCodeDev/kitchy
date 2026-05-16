@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from uuid import UUID
@@ -6,7 +7,7 @@ from uuid import UUID
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import User
-from app.schemas.pedido import PedidoCreate, PedidoUpdate, PedidoResponse
+from app.schemas.pedido import PedidoCreate, PedidoUpdate, PedidoResponse, ColisionHoraResponse
 from app.services.pedido_service import PedidoService
 
 router = APIRouter()
@@ -30,6 +31,33 @@ async def listar_pedidos(
 ):
     """Obtiene la agenda de pedidos ordenada cronológicamente."""
     return await PedidoService.get_pedidos(db, current_user.id, estado, limit, offset)
+
+@router.get("/check-colision", response_model=ColisionHoraResponse)
+async def check_colision(
+    fecha_entrega: datetime,
+    exclude_id: Optional[UUID] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Chequea si ya existen pedidos en la misma hora que la fecha proporcionada.
+    Falla silenciosamente devolviendo hay_colision=False en caso de error interno.
+    """
+    try:
+        return await PedidoService.check_colision_hora(
+            db=db,
+            fecha_entrega=fecha_entrega,
+            usuario_id=current_user.id,
+            exclude_id=exclude_id
+        )
+    except Exception:
+        # Fallback benigno: No asustar al usuario si falla el chequeo
+        return ColisionHoraResponse(
+            hay_colision=False,
+            cantidad=0,
+            hora_inicio="",
+            hora_fin=""
+        )
 
 @router.get("/{pedido_id}", response_model=PedidoResponse)
 async def obtener_pedido(
