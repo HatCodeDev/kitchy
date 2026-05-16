@@ -1,0 +1,27 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy Kitchy API
+    runs-on: [self-hosted, kitchy]
+
+    steps:
+      - name: Pull latest changes
+        run: |
+          cd /home/vonlunant/workspace-projects/Kitchy/code/kitchy
+          git pull origin main
+
+      - name: Restart API container
+        run: |
+          cd /home/vonlunant/workspace-projects/Kitchy/code/kitchy
+          docker compose restart api
+
+      - name: Run database migrations
+        run: |
+          cd /home/vonlunant/workspace-projects/Kitchy/code/kitchy
+          docker compose exec -T api alembic upgrade head
