@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.gasto_oculto import GastoOculto
+from app.models.user import User
 
 
 class HiddenCostService:
@@ -15,7 +16,8 @@ class HiddenCostService:
         """
         Resuelve los gastos ocultos aplicando la regla de Fallback:
         1. Busca configuración específica de la receta.
-        2. Si un gasto no está configurado, usa la configuración global del usuario (receta_id IS NULL).
+        2. Si no hay configuración específica activa de receta, usa los defaults globales del usuario (de la tabla users).
+        3. Si no hay defaults del usuario, usa la configuración global del usuario de la tabla gastos_ocultos (receta_id IS NULL).
         """
         # Obtener gastos específicos de esta receta
         query_especificos = select(GastoOculto).where(
@@ -25,7 +27,7 @@ class HiddenCostService:
         result_especificos = await db.execute(query_especificos)
         gastos_especificos = result_especificos.scalars().all()
 
-        # Obtener gastos globales del usuario
+        # Obtener gastos globales del usuario (receta_id IS NULL)
         query_globales = select(GastoOculto).where(
             GastoOculto.receta_id.is_(None),
             GastoOculto.usuario_id == usuario_id
@@ -33,15 +35,57 @@ class HiddenCostService:
         result_globales = await db.execute(query_globales)
         gastos_globales = result_globales.scalars().all()
 
+        # Obtener el usuario para sus defaults globales
+        query_user = select(User).where(User.id == usuario_id)
+        result_user = await db.execute(query_user)
+        usuario = result_user.scalar_one_or_none()
+
+        empaque_val = usuario.empaque_mxn_default if (usuario and usuario.empaque_mxn_default is not None) else Decimal('0.00')
+        desgaste_val = usuario.desgaste_pct_default if (usuario and usuario.desgaste_pct_default is not None) else Decimal('0.00')
+
         # Mapeamos a diccionarios rápidos por 'tipo' ('empaque' o 'gas_luz')
         mapa_especificos = {g.tipo: g for g in gastos_especificos}
         mapa_globales = {g.tipo: g for g in gastos_globales}
 
         # Resolución de jerarquía (Fallback)
-        # Prefiere el específico. Si es None, toma el global. Si ambos son None, retorna None.
+        # Prefiere el específico si está activo. Si no, toma el default global del usuario o el global de gastos_ocultos.
+        gasto_empaque = mapa_especificos.get('empaque')
+        if not gasto_empaque or not gasto_empaque.activo:
+            global_empaque = mapa_globales.get('empaque')
+            if global_empaque:
+                global_empaque.valor = empaque_val
+                global_empaque.activo = True
+                gasto_empaque = global_empaque
+            else:
+                gasto_empaque = GastoOculto(
+                    usuario_id=usuario_id,
+                    receta_id=None,
+                    tipo='empaque',
+                    valor=empaque_val,
+                    es_porcentaje=False,
+                    activo=True
+                )
+
+        gasto_gas_luz = mapa_especificos.get('gas_luz')
+        if not gasto_gas_luz or not gasto_gas_luz.activo:
+            global_gas_luz = mapa_globales.get('gas_luz')
+            if global_gas_luz:
+                global_gas_luz.valor = desgaste_val
+                global_gas_luz.activo = True
+                gasto_gas_luz = global_gas_luz
+            else:
+                gasto_gas_luz = GastoOculto(
+                    usuario_id=usuario_id,
+                    receta_id=None,
+                    tipo='gas_luz',
+                    valor=desgaste_val,
+                    es_porcentaje=True,
+                    activo=True
+                )
+
         resultado = {
-            'empaque': mapa_especificos.get('empaque') or mapa_globales.get('empaque'),
-            'gas_luz': mapa_especificos.get('gas_luz') or mapa_globales.get('gas_luz')
+            'empaque': gasto_empaque,
+            'gas_luz': gasto_gas_luz
         }
 
         return resultado
