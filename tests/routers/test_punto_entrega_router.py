@@ -1,38 +1,15 @@
 import pytest
-from httpx import AsyncClient
-from uuid import uuid4
-from datetime import datetime, timezone
-
-from main import app
-from app.core.database import Base, get_db, engine
-
-
-@pytest.fixture
-async def test_db():
-    """Setup and teardown test database."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-
-@pytest.fixture
-async def client(test_db):
-    """Proporciona un cliente HTTP para testing."""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
 
 
 @pytest.mark.asyncio
-async def test_lista_puntos_entrega_vacia_sin_autenticacion(client):
+async def test_lista_puntos_entrega_vacia_sin_autenticacion(async_client, db_test):
     """GET /puntos-entrega sin JWT retorna 401."""
-    response = await client.get("/api/v1/puntos-entrega/")
+    response = await async_client.get("/api/v1/puntos-entrega/")
     assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_crear_punto_entrega_success(client):
+async def test_crear_punto_entrega_success(async_client, db_test):
     """POST /puntos-entrega/ crea un punto exitosamente."""
     # Nota: Este test requeriría autenticación real, que está fuera del scope simple
     # Para un test real, se necesitaría:
