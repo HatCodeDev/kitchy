@@ -3,13 +3,14 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.pedido import Pedido
 from app.models.linea_pedido import LineaPedido
-from app.schemas.pedido import PedidoCreate, PedidoUpdate
+from app.models.punto_entrega import PuntoEntrega
+from app.schemas.pedido import PedidoCreate, PedidoUpdate, ColisionHoraResponse
 from app.services.produccion_service import ProduccionService
 
 try:
@@ -30,9 +31,43 @@ class PedidoService:
     }
 
     @staticmethod
+    def _set_display_resolution(pedido: Pedido) -> None:
+        """Resuelve punto_entrega_display y punto_entrega_direccion a partir de FK o text fallback."""
+        if pedido.punto_entrega_rel:
+            pedido.punto_entrega_display = pedido.punto_entrega_rel.nombre
+            pedido.punto_entrega_direccion = pedido.punto_entrega_rel.direccion
+        else:
+            pedido.punto_entrega_display = pedido.punto_entrega
+            pedido.punto_entrega_direccion = pedido.punto_entrega
+
+    @staticmethod
+    async def _validate_punto_entrega_fk(
+        db: AsyncSession,
+        punto_entrega_id: Optional[UUID],
+        usuario_id: UUID
+    ) -> None:
+        """Valida que el FK, si está presente, pertenece al usuario."""
+        if not punto_entrega_id:
+            return
+
+        query = select(PuntoEntrega).where(
+            and_(
+                PuntoEntrega.id == punto_entrega_id,
+                PuntoEntrega.usuario_id == usuario_id
+            )
+        )
+        result = await db.execute(query)
+        punto = result.scalar_one_or_none()
+
+        if not punto:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="El punto de entrega especificado no existe o no te pertenece"
+            )
+
+    @staticmethod
     async def create_pedido(db: AsyncSession, data: PedidoCreate, usuario_id: UUID) -> Pedido:
         """Crea un pedido asegurando que la fecha sea futura."""
-
 
         ahora_utc = datetime.now(timezone.utc)
         fecha_entrega_utc = data.fecha_entrega
@@ -45,6 +80,9 @@ class PedidoService:
                 detail="La fecha de entrega debe ser en el futuro"
             )
 
+        # Validar FK si está presente
+        await PedidoService._validate_punto_entrega_fk(db, data.punto_entrega_id, usuario_id)
+
         # Crear cabecera del Pedido
         nuevo_pedido = Pedido(
             usuario_id=usuario_id,
@@ -52,6 +90,7 @@ class PedidoService:
             cliente_whatsapp=data.cliente_whatsapp,
             fecha_entrega=data.fecha_entrega,
             punto_entrega=data.punto_entrega,
+            punto_entrega_id=data.punto_entrega_id,
             notas=data.notas,
             estado="pendiente"
         )
@@ -79,14 +118,18 @@ class PedidoService:
         )
 
         await db.commit()
-        
+
         # Recargar con relaciones para la respuesta
-        query = select(Pedido).where(Pedido.id == nuevo_pedido.id).options(selectinload(Pedido.lineas))
+        query = select(Pedido).where(Pedido.id == nuevo_pedido.id).options(
+            selectinload(Pedido.lineas),
+            selectinload(Pedido.punto_entrega_rel)
+        )
         result = await db.execute(query)
         nuevo_pedido = result.scalar_one()
 
-        # Inyectar el campo computado
+        # Inyectar campos computados
         nuevo_pedido.whatsapp_url = build_whatsapp_url(nuevo_pedido.cliente_whatsapp)
+        PedidoService._set_display_resolution(nuevo_pedido)
 
         return nuevo_pedido
 
@@ -102,6 +145,10 @@ class PedidoService:
                 detail=f"No se puede editar un pedido con estado '{pedido.estado}'"
             )
 
+        # Validar FK si está presente
+        if data.punto_entrega_id is not None:
+            await PedidoService._validate_punto_entrega_fk(db, data.punto_entrega_id, usuario_id)
+
         # Actualizar campos básicos
         if data.cliente_nombre is not None:
             pedido.cliente_nombre = data.cliente_nombre
@@ -112,10 +159,12 @@ class PedidoService:
             from app.services.notificacion_service import NotificacionService
             await NotificacionService.cancelar_recordatorio(db, pedido.id, usuario_id)
             await NotificacionService.programar_recordatorio(db, pedido.id, data.fecha_entrega, usuario_id)
-            
+
             pedido.fecha_entrega = data.fecha_entrega
         if data.punto_entrega is not None:
             pedido.punto_entrega = data.punto_entrega
+        if data.punto_entrega_id is not None:
+            pedido.punto_entrega_id = data.punto_entrega_id
         if data.notas is not None:
             pedido.notas = data.notas
 
@@ -124,7 +173,7 @@ class PedidoService:
             # Borrar líneas viejas
             for linea in list(pedido.lineas):
                 await db.delete(linea)
-            
+
             # Forzar limpieza en la sesión antes de insertar nuevas
             await db.flush()
 
@@ -140,16 +189,59 @@ class PedidoService:
                 db.add(nueva_linea)
 
         pedido.fecha_modificacion = datetime.now(timezone.utc)
-        
+
         await db.commit()
-        
+
         # Recargar con relaciones para la respuesta
-        query = select(Pedido).where(Pedido.id == pedido.id).options(selectinload(Pedido.lineas))
+        query = select(Pedido).where(Pedido.id == pedido.id).options(
+            selectinload(Pedido.lineas),
+            selectinload(Pedido.punto_entrega_rel)
+        )
         result = await db.execute(query)
         pedido = result.scalar_one()
 
         pedido.whatsapp_url = build_whatsapp_url(pedido.cliente_whatsapp)
+        PedidoService._set_display_resolution(pedido)
         return pedido
+
+    @staticmethod
+    async def check_colision_hora(
+        db: AsyncSession,
+        fecha_entrega: datetime,
+        usuario_id: UUID,
+        exclude_id: Optional[UUID] = None
+    ) -> ColisionHoraResponse:
+        """Chequea si ya hay otros pedidos en la misma hora (truncada) para el usuario."""
+        from sqlalchemy import func
+
+        # Asegurar UTC y truncar para el cálculo de la ventana
+        if fecha_entrega.tzinfo is None:
+            fecha_entrega = fecha_entrega.replace(tzinfo=timezone.utc)
+
+        hora_inicio_dt = fecha_entrega.replace(minute=0, second=0, microsecond=0)
+        hora_fin_dt = hora_inicio_dt + timedelta(hours=1)
+
+        # Query: pedidos del usuario, no cancelados, en la misma hora truncada
+        query = select(func.count(Pedido.id)).where(
+            and_(
+                Pedido.usuario_id == usuario_id,
+                Pedido.estado != "cancelado",
+                func.date_trunc('hour', Pedido.fecha_entrega) == func.date_trunc('hour', fecha_entrega)
+            )
+        )
+
+        if exclude_id:
+            query = query.where(Pedido.id != exclude_id)
+
+        result = await db.execute(query)
+        count = result.scalar() or 0
+
+        return ColisionHoraResponse(
+            hay_colision=count > 0,
+            cantidad=count,
+            hora_inicio=hora_inicio_dt.strftime("%H:00"),
+            hora_fin=hora_fin_dt.strftime("%H:00")
+        )
 
     @staticmethod
     async def get_pedidos(
@@ -166,17 +258,21 @@ class PedidoService:
         if estado:
             query = query.where(Pedido.estado == estado)
 
-        # Orden ascendente (los más urgentes salen primero) y selectinload para las líneas
+        # Orden ascendente (los más urgentes salen primero) y selectinload para las líneas y punto_entrega
         query = query.order_by(Pedido.fecha_entrega.asc()) \
             .limit(limit).offset(offset) \
-            .options(selectinload(Pedido.lineas))
+            .options(
+                selectinload(Pedido.lineas),
+                selectinload(Pedido.punto_entrega_rel)
+            )
 
         result = await db.execute(query)
         pedidos = list(result.scalars().all())
 
-        # Inyectar url computada en tiempo de ejecución
+        # Inyectar campos computados en tiempo de ejecución
         for p in pedidos:
             p.whatsapp_url = build_whatsapp_url(p.cliente_whatsapp)
+            PedidoService._set_display_resolution(p)
 
         return pedidos
 
@@ -186,7 +282,10 @@ class PedidoService:
         query = select(Pedido).where(
             Pedido.id == pedido_id,
             Pedido.usuario_id == usuario_id
-        ).options(selectinload(Pedido.lineas))
+        ).options(
+            selectinload(Pedido.lineas),
+            selectinload(Pedido.punto_entrega_rel)
+        )
 
         result = await db.execute(query)
         pedido = result.scalar_one_or_none()
@@ -195,6 +294,7 @@ class PedidoService:
             raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
         pedido.whatsapp_url = build_whatsapp_url(pedido.cliente_whatsapp)
+        PedidoService._set_display_resolution(pedido)
         return pedido
 
     @staticmethod
@@ -222,17 +322,21 @@ class PedidoService:
         pedido.estado = nuevo_estado
         pedido.fecha_modificacion = datetime.now(timezone.utc)
 
-
         # GATILLO DE INVENTARIO
         if nuevo_estado == "entregado":
             # Llamamos al Orquestador para que cruce las líneas con las recetas y descuente la alacena
             await ProduccionService.descontar_insumos_por_pedido(db, pedido.id, usuario_id)
 
         await db.commit()
-        
+
         # Recargar con relaciones para la respuesta
-        query = select(Pedido).where(Pedido.id == pedido.id).options(selectinload(Pedido.lineas))
+        query = select(Pedido).where(Pedido.id == pedido.id).options(
+            selectinload(Pedido.lineas),
+            selectinload(Pedido.punto_entrega_rel)
+        )
         result = await db.execute(query)
         pedido = result.scalar_one()
 
+        pedido.whatsapp_url = build_whatsapp_url(pedido.cliente_whatsapp)
+        PedidoService._set_display_resolution(pedido)
         return pedido

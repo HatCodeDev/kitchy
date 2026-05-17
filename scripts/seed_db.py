@@ -17,6 +17,7 @@ from app.models.paso_receta import PasoReceta
 from app.models.gasto_oculto import GastoOculto
 from app.models.pedido import Pedido
 from app.models.linea_pedido import LineaPedido
+from app.models.punto_entrega import PuntoEntrega
 
 # Schemas y Servicios
 from app.schemas.insumo import InsumoCreate
@@ -47,7 +48,7 @@ async def seed_database():
         # 1. CREAR EL USUARIO REPOSTERO
         # ---------------------------------------------------------
         usuario = User(
-            email="chef@kitchy.com ",
+            email="chef@kitchy.com",
             hashed_password=get_password_hash("Flutter2026!"),
             is_active=True
         )
@@ -220,6 +221,33 @@ async def seed_database():
         await db.commit()
 
         print(f"OK: Pedido ENTREGADO creado (Historico insertado por DB directo)")
+
+        # ---------------------------------------------------------
+        # CASO D: 3 pedidos en la MISMA HORA (para testear warning de colisión)
+        # Todos entregarán mañana a las 15:xx — misma hora UTC
+        # ---------------------------------------------------------
+        hora_colision = datetime.now(timezone.utc).replace(
+            hour=15, minute=0, second=0, microsecond=0
+        ) + timedelta(days=1)
+
+        for i, (cliente, minutos, producto) in enumerate([
+            ("Panadería Don Beto", 0,  "Flan Napolitano"),
+            ("Eventos Ramírez",    20, "Pastel de Chocolate Húmedo"),
+            ("Colegio San José",   45, "Cheesecake Frutos Rojos"),
+        ], start=1):
+            p = await PedidoService.create_pedido(db, PedidoCreate(
+                cliente_nombre=cliente,
+                cliente_whatsapp=f"551234000{i}",
+                fecha_entrega=hora_colision + timedelta(minutes=minutos),
+                punto_entrega="Plaza Central",
+                lineas=[LineaPedidoCreate(
+                    nombre_producto=producto,
+                    cantidad_porciones=8,
+                    precio_acordado_mxn=Decimal('350.00'),
+                    receta_id=receta_flan.id
+                )]
+            ), usuario.id)
+            print(f"OK: Pedido COLISION {i}/3 creado (Cliente: {p.cliente_nombre}, hora: {hora_colision + timedelta(minutes=minutos):%H:%M})")
 
         print("\nLa reposteria esta lista! Base de datos de Kitchy sembrada con exito.")
 

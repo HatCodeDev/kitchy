@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
 
-from app.routers import auth, users, insumos, recetas, pedidos, temporizadores, notificaciones
+from app.routers import auth, users, insumos, recetas, pedidos, temporizadores, notificaciones, punto_entrega_router
 from app.jobs.notificacion_job import procesar_notificaciones_loop
 import asyncio
 
@@ -65,6 +65,7 @@ app.include_router(recetas.router, prefix="/api/v1/recetas", tags=["Recetas"])
 app.include_router(pedidos.router, prefix="/api/v1/pedidos", tags=["Pedidos"])
 app.include_router(temporizadores.router, prefix="/api/v1/temporizadores", tags=["Temporizadores"])
 app.include_router(notificaciones.router, prefix="/api/v1/notificaciones", tags=["Notificaciones"])
+app.include_router(punto_entrega_router.router, prefix="/api/v1/puntos-entrega", tags=["Puntos de Entrega"])
 
 @app.get("/", tags=["Health Check"])
 def health_check():

@@ -10,3 +10,4 @@ from app.models.pedido import Pedido
 from app.models.linea_pedido import LineaPedido
 from app.models.temporizador import Temporizador
 from app.models.notificacion_programada import NotificacionProgramada
+from app.models.punto_entrega import PuntoEntrega
