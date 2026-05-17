@@ -19,10 +19,10 @@ jobs:
           git reset --hard origin/main
           git clean -fd
 
-      - name: Restart API container
+      - name: Rebuild and restart API container
         run: |
           cd /home/vonlunant/workspace-projects/Kitchy/code/kitchy
-          docker compose restart api
+          docker compose up -d --build api
 
       - name: Run database migrations
         run: |
