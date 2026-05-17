@@ -22,6 +22,7 @@ jobs:
       - name: Rebuild and restart API container
         run: |
           cd /home/vonlunant/workspace-projects/Kitchy/code/kitchy
+          docker compose stop api
           docker compose up -d --build api
 
       - name: Run database migrations
