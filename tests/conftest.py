@@ -81,6 +81,7 @@ async def bootstrap_db():
     """Asegura la existencia de la base de datos y recrea el esquema."""
     await create_database_if_not_exists()
     await init_db()
+    await test_engine.dispose()
 
 
 def pytest_sessionstart(session):
@@ -113,13 +114,14 @@ async def db_test():
         # Rollback y limpieza al finalizar el test
         await session.close()
         await transaction.rollback()
+        await test_engine.dispose()
         
         # Limpiamos los overrides
         app.dependency_overrides.clear()
 
 
 @pytest.fixture
-async def async_client():
+async def async_client(db_test):
     """Proporciona un cliente HTTP asíncrono para consumir la API de FastAPI."""
     from httpx import AsyncClient, ASGITransport
     from main import app
