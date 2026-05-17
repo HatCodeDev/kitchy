@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from app.core.limiter import limiter
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -14,7 +15,8 @@ router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def register_user(request: Request, user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """
     Registra un nuevo usuario en Kitchy.
     """
@@ -47,7 +49,9 @@ async def register_user(user_data: UserCreate, db: AsyncSession = Depends(get_db
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("10/minute")
 async def login_for_access_token(
+        request: Request,
         form_data: OAuth2PasswordRequestForm = Depends(),
         db: AsyncSession = Depends(get_db)
 ):

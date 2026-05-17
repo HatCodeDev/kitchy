@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from app.core.limiter import limiter
 
 from app.routers import auth, users, insumos, recetas, pedidos, temporizadores, notificaciones, punto_entrega_router
 from app.jobs.notificacion_job import procesar_notificaciones_loop
@@ -47,6 +50,10 @@ app = FastAPI(
     openapi_tags=tags_metadata,
     lifespan=lifespan
 )
+
+# Configuración del limitador de peticiones (Rate Limiting)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS
 app.add_middleware(
