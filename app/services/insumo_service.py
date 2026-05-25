@@ -16,13 +16,25 @@ from app.schemas.insumo import InsumoCreate, InsumoUpdate
 class InsumoService:
     @staticmethod
     async def create_insumo(db: AsyncSession, data: InsumoCreate, usuario_id: UUID) -> Insumo:
+       """
+        Registra un nuevo insumo y establece su stock inicial.
+    
+        El stock inicial se toma directamente de la cantidad declarada en la compra.
+        Esta función persiste los cambios en la base de datos (hace commit).
+    
+        Args:
+            db: Sesión asíncrona activa para la transacción.
+            data: Payload del insumo (debe incluir 'cantidad_comprada').
+            usuario_id: Identificador del usuario que ejecuta la acción.
+    
+        Returns:
+            La instancia del Insumo recién creado y refrescado desde la DB.
         """
-        Crea un insumo y establece el stock inicial basado en la compra.
-        """
+        
         nuevo_insumo = Insumo(
             **data.model_dump(),
             usuario_id=usuario_id,
-            cantidad_actual=data.cantidad_comprada,  # Stock inicial = cantidad comprada
+            cantidad_actual=data.cantidad_comprada, 
             fecha_ultimo_precio=date.today(),
             activo=True
         )
