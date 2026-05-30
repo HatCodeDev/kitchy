@@ -1,3 +1,10 @@
+"""
+Servicio de Gestión de Recetas de Cocina.
+
+Este módulo implementa el control CRUD para recetas culinarias, incluyendo la orquestación
+de sus ingredientes, pasos ordenados de preparación y gastos indirectos. También integra
+el motor de costeo culinario (CostCalculationService) y gestiona transacciones ACID complejas.
+"""
 from uuid import UUID
 from typing import List, Dict, Any, Union
 from sqlalchemy import select
@@ -17,10 +24,25 @@ from app.services.unit_conversion_service import UnitConversionService
 
 
 class RecetaService:
+    """
+    Servicio encargado de administrar las recetas, sus procesos y la liquidación financiera.
+    """
 
     @staticmethod
     async def get_all(db: AsyncSession, usuario_id: UUID) -> List[Receta]:
-        """Obtiene todas las recetas activas del usuario con sus relaciones."""
+        """
+        Obtiene todas las recetas activas de un usuario cargando sus relaciones de forma óptima.
+
+        Utiliza `selectinload` para precargar de manera eficiente ingredientes (con sus respectivos
+        insumos), pasos de preparación y configuraciones de gastos ocultos en un mínimo de ráfagas SQL.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            usuario_id (UUID): ID del usuario dueño de las recetas.
+
+        Returns:
+            List[Receta]: Listado de recetas activas del usuario.
+        """
         query = (
             select(Receta)
             .where(Receta.usuario_id == usuario_id, Receta.activa == True)
@@ -35,7 +57,20 @@ class RecetaService:
 
     @staticmethod
     async def get_by_id(db: AsyncSession, receta_id: UUID, usuario_id: UUID) -> Receta:
-        """Obtiene una receta con todas sus relaciones cargadas."""
+        """
+        Busca una receta activa por ID validando la propiedad y cargando sus relaciones.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            receta_id (UUID): ID de la receta buscada.
+            usuario_id (UUID): ID del usuario propietario.
+
+        Returns:
+            Receta: La instancia de Receta cargada.
+
+        Raises:
+            HTTPException: 404 si la receta no existe, pertenece a otro usuario o está inactiva.
+        """
         query = (
             select(Receta)
             .where(Receta.id == receta_id, Receta.usuario_id == usuario_id, Receta.activa == True)
@@ -53,7 +88,23 @@ class RecetaService:
 
     @staticmethod
     async def update_receta(db: AsyncSession, receta_id: UUID, data: RecetaUpdate, usuario_id: UUID) -> Receta:
-        """Actualización completa con patrón de flush para evitar UniqueConstraint."""
+        """
+        Actualiza completamente los datos, ingredientes y pasos de una receta.
+
+        Para evitar infracciones de UniqueConstraints de base de datos en ingredientes y pasos,
+        aplica un patrón de borrado de relaciones huérfanas seguido de una llamada a `db.flush()`
+        antes de insertar las nuevas listas de ingredientes y pasos de forma atómica.
+        Realiza la conversión de tiempos de duración a segundos si es necesario.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            receta_id (UUID): ID de la receta a modificar.
+            data (RecetaUpdate): DTO con los campos básicos, nuevos ingredientes y pasos.
+            usuario_id (UUID): ID del usuario propietario.
+
+        Returns:
+            Receta: La instancia de Receta actualizada y re-consultada de la base de datos.
+        """
         receta = await RecetaService.get_by_id(db, receta_id, usuario_id)
         update_data = data.model_dump(exclude_unset=True)
 
@@ -102,7 +153,20 @@ class RecetaService:
 
     @staticmethod
     async def create_receta(db: AsyncSession, data: RecetaCreate, usuario_id: UUID) -> Receta:
-        """Crea la receta y sus gastos default en una sola transacción."""
+        """
+        Crea una nueva receta, sus ingredientes, pasos y gastos por defecto de forma atómica.
+
+        Inicializa los gastos ocultos desactivados mediante `HiddenCostService.crear_gastos_default`
+        y persiste todo bajo una única transacción ACID coordinada.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            data (RecetaCreate): DTO con los detalles de la receta, ingredientes y pasos.
+            usuario_id (UUID): ID del usuario creador.
+
+        Returns:
+            Receta: La receta creada con todas sus relaciones resueltas.
+        """
         nueva_receta = Receta(
             usuario_id=usuario_id,
             nombre=data.nombre,
@@ -147,7 +211,17 @@ class RecetaService:
 
     @staticmethod
     async def delete_receta(db: AsyncSession, receta_id: UUID, usuario_id: UUID) -> bool:
-        """Soft delete de la receta."""
+        """
+        Desactiva lógicamente (soft delete) una receta del sistema.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            receta_id (UUID): ID de la receta a desactivar.
+            usuario_id (UUID): ID del usuario propietario.
+
+        Returns:
+            bool: True si la desactivación fue exitosa.
+        """
         receta = await RecetaService.get_by_id(db, receta_id, usuario_id)
         receta.activa = False
         await db.commit()
@@ -156,11 +230,25 @@ class RecetaService:
     @staticmethod
     async def calcular_costeo(
             db: AsyncSession,
-            receta_or_id: Union[UUID, Receta],  # Acepta ID o el objeto completo
+            receta_or_id: Union[UUID, Receta],
             usuario_id: UUID
     ) -> Dict[str, Any]:
-        """Calcula el costeo. Si recibe el objeto Receta, evita una consulta extra."""
+        """
+        Calcula el costeo culinario y financiero de una receta.
 
+        Para optimizar recursos de red y consultas SQL, acepta tanto el ID de la receta
+        como la instancia de la receta ya cargada (evitando consultas duplicadas si se invoca
+        desde colecciones). Obtiene los precios unitarios actuales de todos sus ingredientes en
+        una sola query, resuelve la jerarquía de gastos ocultos y corre el motor de cálculo.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            receta_or_id (Union[UUID, Receta]): ID de la receta o su instancia cargada.
+            usuario_id (UUID): ID del usuario propietario.
+
+        Returns:
+            Dict[str, Any]: Resultados monetarios desglosados y precio sugerido.
+        """
         # Lógica inteligente de carga:
         if isinstance(receta_or_id, UUID):
             receta = await RecetaService.get_by_id(db, receta_or_id, usuario_id)

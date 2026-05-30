@@ -1,3 +1,9 @@
+"""
+Controlador de Notificaciones y Alertas.
+
+Este router expone los endpoints para consultar el listado de notificaciones
+programadas y despachadas, brindando soporte al polling periódico del cliente móvil (Flutter).
+"""
 from datetime import datetime, timezone, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, Query
@@ -11,6 +17,7 @@ from app.schemas.notificacion import NotificacionRead
 
 router = APIRouter()
 
+
 @router.get("/", response_model=List[NotificacionRead])
 async def get_notificaciones(
     db: AsyncSession = Depends(get_db),
@@ -18,8 +25,16 @@ async def get_notificaciones(
     enviada: bool = Query(True)
 ):
     """
-    Obtiene las notificaciones del usuario.
-    Por defecto, retorna las enviadas en los últimos 5 minutos para el polling de Flutter.
+    Recupera el listado de notificaciones programadas o despachadas del usuario autenticado.
+
+    ### Mecanismo de Polling optimizado:
+    * Si se solicita con `enviada=True` (por defecto), el backend filtra de forma automática
+      únicamente las alertas despachadas en los **últimos 5 minutos**. Esto reduce drásticamente
+      el volumen de transferencia de red del polling periódico del cliente móvil (Flutter)
+      evitando el renderizado repetido.
+
+    ### Permisos:
+    * **Usuario Autenticado** (requiere token Bearer JWT válido).
     """
     ahora = datetime.now(timezone.utc)
     hace_5_min = ahora - timedelta(minutes=5)

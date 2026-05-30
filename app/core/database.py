@@ -1,3 +1,11 @@
+"""
+Configuración de la Base de Datos y Sesiones.
+
+Este módulo inicializa el motor asíncrono de SQLAlchemy (utilizando el driver asyncpg),
+define la fábrica de sesiones para realizar operaciones asíncronas de persistencia,
+expone la clase base declarativa para los modelos ORM y proporciona generadores de
+sesiones para la inyección de dependencias en FastAPI.
+"""
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import declarative_base
 from app.core.config import settings
@@ -16,11 +24,16 @@ AsyncSessionLocal = async_sessionmaker(
 # Base para nuestros Modelos (Clase padre de la que heredarán todas las tablas)
 Base = declarative_base()
 
-# 4. Dependencia de FastAPI para obtener la sesión de BD en cada petición
+
 async def get_db():
     """
-    Crea una sesión de base de datos por cada request y la cierra al terminar.
-    Esto previene fugas de memoria y bloqueos en la base de datos.
+    Crea una sesión de base de datos por cada petición y la cierra al finalizar.
+
+    Esto previene fugas de memoria, mantiene las conexiones en el pool optimizadas
+    y garantiza que las transacciones se manejen de manera aislada por petición.
+
+    Yields:
+        AsyncSession: Sesión de base de datos asíncrona activa de SQLAlchemy.
     """
     async with AsyncSessionLocal() as session:
         yield session
@@ -28,8 +41,12 @@ async def get_db():
 
 async def create_tables():
     """
-    Crea las tablas en PostgreSQL basándose en los modelos de SQLAlchemy.
-    En producción, usaríamos Alembic para migraciones, pero para desarrollo esto es ideal.
+    Crea todas las tablas definidas en los modelos en PostgreSQL.
+
+    Nota:
+        En producción se recomienda delegar esto enteramente a Alembic,
+        pero esta función es sumamente útil para inicializaciones rápidas
+        en entornos de prueba o desarrollo local.
     """
     # Importamos el módulo de modelos completo aquí para evitar dependencias circulares.
     # Al hacer esto, Python lee el archivo app/models/__init__.py, cargando todos los

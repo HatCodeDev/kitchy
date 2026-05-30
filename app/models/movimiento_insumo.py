@@ -1,3 +1,9 @@
+"""
+Modelo de datos para la entidad MovimientoInsumo.
+
+Registra el historial de auditoría de entradas y salidas de inventario, permitiendo
+el control de stock, cálculo de mermas y auditorías de consumo en producción.
+"""
 import uuid
 from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
@@ -8,6 +14,22 @@ from app.core.database import Base
 
 
 class MovimientoInsumo(Base):
+    """
+    Modelo ORM que representa la tabla 'movimientos_insumo'.
+
+    Registra cada transacción que altera el nivel de stock físico de un insumo.
+
+    Atributos:
+        id (UUID): Identificador único del movimiento (Primary Key).
+        insumo_id (UUID): ID del insumo afectado (Foreign Key, indexado).
+        usuario_id (UUID): ID del usuario que generó el movimiento (Foreign Key).
+        tipo (str): Tipo de movimiento ('entrada' o 'salida').
+        cantidad (Decimal): Cantidad física movilizada (debe ser > 0).
+        motivo (str): Motivo de la transacción ('compra', 'uso_produccion', 'merma').
+        fecha (datetime): Fecha y hora exacta de inserción en base de datos.
+        insumo (Insumo): Relación con el insumo modificado.
+        usuario (User): Relación con el usuario autor del movimiento.
+    """
     __tablename__ = 'movimientos_insumo'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 

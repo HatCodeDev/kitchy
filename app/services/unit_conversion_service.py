@@ -1,9 +1,26 @@
+"""
+Servicio de Conversión de Unidades de Medida.
+
+Este módulo provee lógica para convertir cantidades físicas entre diferentes unidades
+de masa (g, kg, oz, lb), volumen (ml, l, gal, tz, cda, cdita), unidades discretas
+(piezas, docenas) y tiempo (seg, min, h).
+"""
 from decimal import Decimal
 import logging
 
 logger = logging.getLogger(__name__)
 
+
 class UnitConversionService:
+    """
+    Servicio encargado de realizar conversiones de unidades y determinar tipos de medidas.
+
+    Atributos:
+        CONVERSION_FACTORS (dict): Diccionario que define los factores de multiplicación
+            para llevar cualquier unidad a su respectiva unidad base (gr para masa, ml
+            para volumen, pza para discretos, seg para tiempo).
+        DISCRETE_UNITS (set): Conjunto de cadenas que representan unidades individuales discretas.
+    """
     # Factores de conversión hacia una unidad base.
     # Masa: base 'gr'
     # Volumen: base 'ml'
@@ -45,7 +62,15 @@ class UnitConversionService:
 
     @staticmethod
     def es_unidad_discreta(unidad: str) -> bool:
-        """Determina si la unidad representa piezas enteras."""
+        """
+        Determina si una unidad representa piezas o unidades discretas enteras.
+
+        Args:
+            unidad (str): El nombre o abreviatura de la unidad a evaluar.
+
+        Returns:
+            bool: True si la unidad es discreta (ej. pieza, docena), False en caso contrario.
+        """
         if not unidad:
             return False
         return unidad.lower().strip() in UnitConversionService.DISCRETE_UNITS
@@ -53,8 +78,19 @@ class UnitConversionService:
     @staticmethod
     def convertir(cantidad: Decimal, unidad_origen: str, unidad_destino: str) -> Decimal:
         """
-        Convierte una cantidad de una unidad origen a una unidad destino.
-        Ejemplo: convertir(500, 'gr', 'kg') -> 0.5
+        Convierte una magnitud de una unidad física de origen a una de destino.
+
+        La conversión se realiza en dos etapas: primero se lleva la cantidad a la
+        unidad base correspondiente y luego se convierte de la unidad base a la de destino.
+
+        Args:
+            cantidad (Decimal): El valor numérico a convertir.
+            unidad_origen (str): La unidad en la que está expresada la cantidad inicial.
+            unidad_destino (str): La unidad deseada para el resultado final.
+
+        Returns:
+            Decimal: El valor equivalente en la unidad de destino. Si alguna unidad
+                no es reconocida, retorna la cantidad original y registra un warning.
         """
         if not unidad_origen or not unidad_destino:
             return cantidad

@@ -1,3 +1,10 @@
+"""
+Servicio de Producción y Control de Inventario en Cocina.
+
+Este módulo orquesta el descuento automático de stock de materias primas cuando un pedido
+es despachado y entregado al cliente, cruzando de manera proporcional las recetas de
+los productos vendidos con los insumos y sus unidades de medida en almacén.
+"""
 from decimal import Decimal
 from uuid import UUID
 from sqlalchemy import select
@@ -14,11 +21,30 @@ from app.services.unit_conversion_service import UnitConversionService
 
 
 class ProduccionService:
+    """
+    Servicio encargado de procesar la lógica de manufactura y descuentos automáticos de alacena.
+    """
+
     @staticmethod
     async def descontar_insumos_por_pedido(db: AsyncSession, pedido_id: UUID, usuario_id: UUID) -> None:
         """
-        Orquesta el descuento de inventario al entregar un pedido.
-        Cruza las líneas del pedido con las recetas para calcular las salidas exactas.
+        Calcula y descuenta el stock de insumos consumidos por la entrega de un pedido.
+
+        Para cada línea del pedido que posea una receta asociada:
+        1. Obtiene la receta y sus ingredientes.
+        2. Determina el factor de proporción en función de las porciones vendidas vs las porciones base.
+        3. Realiza la conversión de la cantidad requerida a la unidad original de compra del insumo.
+        4. Si el insumo es discreto (piezas), redondea hacia arriba (ROUND_CEILING) para descontar piezas enteras.
+        5. Invoca a `InsumoService.registrar_movimiento` para restar stock y crear el historial.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            pedido_id (UUID): ID del pedido completado.
+            usuario_id (UUID): ID del usuario propietario de la orden.
+
+        Raises:
+            HTTPException: 404 si el pedido no existe, o 400 si el stock físico es insuficiente
+                para cubrir alguno de los ingredientes de las recetas requeridas.
         """
         # Obtener el pedido y sus líneas (selectinload para evitar lazy loading problems)
         query_pedido = select(Pedido).where(
@@ -63,6 +89,11 @@ class ProduccionService:
                 
                 # Convertir la cantidad a la unidad en la que se compró/almacenó el insumo
                 cantidad_a_descontar = UnitConversionService.convertir(
+                    offset=Decimal('0.00'),  # (Parámetro no requerido, se usa conversión directa)
+                    cantidad=cantidad_en_receta,
+                    unidad_origen=ingrediente.unidad,
+                    unidad_destino=ingrediente.insumo.unidad
+                ) if False else UnitConversionService.convertir(
                     cantidad=cantidad_en_receta,
                     unidad_origen=ingrediente.unidad,
                     unidad_destino=ingrediente.insumo.unidad

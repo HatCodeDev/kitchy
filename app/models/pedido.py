@@ -1,3 +1,9 @@
+"""
+Modelo de datos para la entidad Pedido.
+
+Gestiona las ventas, el estado del pedido, datos de contacto del cliente
+y los detalles específicos de entrega de los productos elaborados.
+"""
 import uuid
 from sqlalchemy import Column, String, DateTime, ForeignKey, Text, CheckConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
@@ -7,6 +13,29 @@ from app.core.database import Base
 
 
 class Pedido(Base):
+    """
+    Modelo ORM que representa la tabla 'pedidos' en la base de datos.
+
+    Representa un pedido de un cliente que incluye productos terminados
+    (líneas de pedido), el estado de entrega y el destino.
+
+    Atributos:
+        id (UUID): Identificador único del pedido (Primary Key).
+        usuario_id (UUID): ID del usuario dueño del pedido (Foreign Key).
+        cliente_nombre (str): Nombre del cliente.
+        cliente_whatsapp (str): Teléfono WhatsApp del cliente para enviar notificaciones.
+        fecha_entrega (datetime): Fecha y hora comprometida para realizar la entrega.
+        punto_entrega (str): Dirección física o punto de encuentro textual de entrega.
+        punto_entrega_id (UUID): ID de la entidad PuntoEntrega si aplica (Foreign Key).
+        estado (str): Estado actual del pedido ('pendiente', 'en_preparacion', 'listo',
+            'entregado', 'cancelado').
+        notas (str): Anotaciones o comentarios adicionales del pedido.
+        fecha_creacion (datetime): Fecha y hora en la que se levantó el pedido.
+        fecha_modificacion (datetime): Fecha y hora de la última actualización.
+        usuario (User): Relación con el usuario propietario de la cuenta.
+        lineas (list[LineaPedido]): Líneas detalladas del pedido (productos y porciones).
+        punto_entrega_rel (PuntoEntrega): Relación con la entidad de Punto de Entrega física.
+    """
     __tablename__ = "pedidos"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -1,3 +1,11 @@
+"""
+Servicio de Gestión de Pedidos y Ventas.
+
+Este módulo implementa el control de pedidos, la lógica de la máquina de estados unidireccional
+(pendiente -> en_preparacion -> listo -> entregado / cancelado), la validación de colisiones horarias
+de entrega, el cálculo de URLs dinámicas para notificaciones vía WhatsApp y la integración con el
+módulo de producción para el descuento automático de stock de insumos al concretar entregas.
+"""
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from uuid import UUID
@@ -21,6 +29,13 @@ except ImportError:
 
 
 class PedidoService:
+    """
+    Servicio que implementa la lógica de negocio para la gestión de pedidos y ventas de Kitchy.
+
+    Atributos:
+        TRANSICIONES_VALIDAS (dict): Define el flujo legal y permitido de la máquina de estados
+            para los pedidos (pendiente -> en_preparacion -> listo -> entregado/cancelado).
+    """
     # MÁQUINA DE ESTADOS
     TRANSICIONES_VALIDAS = {
         "pendiente": ["en_preparacion", "cancelado"],
@@ -32,7 +47,15 @@ class PedidoService:
 
     @staticmethod
     def _set_display_resolution(pedido: Pedido) -> None:
-        """Resuelve punto_entrega_display y punto_entrega_direccion a partir de FK o text fallback."""
+        """
+        Resuelve y asigna dinámicamente los campos virtuales de visualización de entrega del pedido.
+
+        Si el pedido tiene un `PuntoEntrega` formal asociado (FK), asigna su nombre y dirección.
+        De lo contrario, recurre al valor de texto plano (fallback) provisto en la creación.
+
+        Args:
+            pedido (Pedido): Instancia de pedido para la cual resolver la visualización.
+        """
         if pedido.punto_entrega_rel:
             pedido.punto_entrega_display = pedido.punto_entrega_rel.nombre
             pedido.punto_entrega_direccion = pedido.punto_entrega_rel.direccion
@@ -46,7 +69,17 @@ class PedidoService:
         punto_entrega_id: Optional[UUID],
         usuario_id: UUID
     ) -> None:
-        """Valida que el FK, si está presente, pertenece al usuario."""
+        """
+        Valida que un ID de punto de entrega exista en el sistema y pertenezca al usuario solicitante.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            punto_entrega_id (Optional[UUID]): ID del punto de entrega a validar.
+            usuario_id (UUID): ID del usuario creador de la orden.
+
+        Raises:
+            HTTPException: 422 si el punto de entrega no existe o pertenece a otro usuario.
+        """
         if not punto_entrega_id:
             return
 
@@ -67,8 +100,24 @@ class PedidoService:
 
     @staticmethod
     async def create_pedido(db: AsyncSession, data: PedidoCreate, usuario_id: UUID) -> Pedido:
-        """Crea un pedido asegurando que la fecha sea futura."""
+        """
+        Crea, valida e inicializa un nuevo pedido con sus correspondientes líneas físicas de detalle.
 
+        Valida que la fecha de entrega sea estrictamente futura en tiempo de servidor (UTC),
+        corrobora que el punto de entrega (si es una FK) pertenezca al usuario, inserta las líneas de pedido,
+        programa recordatorios automáticos de entrega 2 horas antes y persiste la transacción.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            data (PedidoCreate): DTO con los detalles básicos de cliente, fecha de entrega y líneas del pedido.
+            usuario_id (UUID): ID del usuario que registra el pedido.
+
+        Returns:
+            Pedido: El pedido recién creado cargado con relaciones e información computada.
+
+        Raises:
+            HTTPException: 400 si la fecha de entrega es en el pasado o presente.
+        """
         ahora_utc = datetime.now(timezone.utc)
         fecha_entrega_utc = data.fecha_entrega
         if fecha_entrega_utc.tzinfo is None:
@@ -135,7 +184,25 @@ class PedidoService:
 
     @staticmethod
     async def update_pedido(db: AsyncSession, pedido_id: UUID, data: PedidoUpdate, usuario_id: UUID) -> Pedido:
-        """Actualiza un pedido existente y sus líneas."""
+        """
+        Actualiza los datos básicos de un pedido y reconstruye sus líneas de detalle si se especifican.
+
+        Si se modifica la fecha de entrega, cancela los recordatorios anteriores y programa la
+        nueva notificación con el nuevo horario.
+        No permite la edición si el pedido ya está en un estado final ('entregado', 'cancelado').
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            pedido_id (UUID): ID del pedido a modificar.
+            data (PedidoUpdate): DTO con los campos que se desean actualizar (excluyendo estado).
+            usuario_id (UUID): ID del usuario dueño de la orden.
+
+        Returns:
+            Pedido: La instancia de Pedido actualizada.
+
+        Raises:
+            HTTPException: 400 si el pedido se encuentra en un estado inmutable ('entregado' o 'cancelado').
+        """
         pedido = await PedidoService.get_by_id(db, pedido_id, usuario_id)
 
         # Solo permitir editar si no está entregado ni cancelado
@@ -211,7 +278,21 @@ class PedidoService:
         usuario_id: UUID,
         exclude_id: Optional[UUID] = None
     ) -> ColisionHoraResponse:
-        """Chequea si ya hay otros pedidos en la misma hora (truncada) para el usuario."""
+        """
+        Determina si existen otros pedidos programados para entrega dentro de la misma hora truncada.
+
+        Sirve para advertir en la UI si el emprendedor tiene compromisos de entregas colisionadas.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            fecha_entrega (datetime): La fecha y hora que se desea comprobar.
+            usuario_id (UUID): ID del usuario dueño de las órdenes.
+            exclude_id (Optional[UUID]): ID de pedido a excluir (útil en ediciones).
+
+        Returns:
+            ColisionHoraResponse: DTO que especifica si hay colisión, la cantidad de colisiones,
+                y el inicio/fin de la ventana horaria analizada.
+        """
         from sqlalchemy import func
 
         # Asegurar UTC y truncar para el cálculo de la ventana
@@ -251,8 +332,22 @@ class PedidoService:
             limit: int = 20,
             offset: int = 0
     ) -> List[Pedido]:
-        """Obtiene la agenda ordenada cronológicamente."""
+        """
+        Obtiene la agenda cronológica de pedidos paginada para un usuario.
 
+        Ordena los pedidos de forma ascendente por fecha de entrega (más urgente primero),
+        resuelve las relaciones y carga campos de visualización y URLs para interactuar por WhatsApp.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            usuario_id (UUID): ID del usuario propietario de las órdenes.
+            estado (Optional[str]): Filtro de estado del pedido ('pendiente', 'en_preparacion', etc.).
+            limit (int): Límite de paginación. Por defecto 20.
+            offset (int): Salto de registros. Por defecto 0.
+
+        Returns:
+            List[Pedido]: Lista de pedidos cargados y listos para representarse.
+        """
         query = select(Pedido).where(Pedido.usuario_id == usuario_id)
 
         if estado:
@@ -278,7 +373,20 @@ class PedidoService:
 
     @staticmethod
     async def get_by_id(db: AsyncSession, pedido_id: UUID, usuario_id: UUID) -> Pedido:
-        """Obtiene un pedido específico con sus líneas."""
+        """
+        Recupera un pedido detallado mediante su ID con aislamiento de multi-tenancy.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            pedido_id (UUID): ID del pedido a buscar.
+            usuario_id (UUID): ID del usuario propietario.
+
+        Returns:
+            Pedido: Instancia de Pedido con líneas de detalle y punto de entrega precargados.
+
+        Raises:
+            HTTPException: 404 si el pedido no existe o no pertenece al usuario.
+        """
         query = select(Pedido).where(
             Pedido.id == pedido_id,
             Pedido.usuario_id == usuario_id
@@ -299,8 +407,26 @@ class PedidoService:
 
     @staticmethod
     async def cambiar_estado(db: AsyncSession, pedido_id: UUID, nuevo_estado: str, usuario_id: UUID) -> Pedido:
-        """Máquina de Estados Unidireccional y gatillo para Opción A (Inventario)."""
+        """
+        Ejecuta la transición del estado de un pedido según las reglas de la máquina de estados.
 
+        Valida que la transición sea legal.
+        GATILLO DE INVENTARIO: Si el estado cambia a 'entregado', invoca inmediatamente
+        a `ProduccionService.descontar_insumos_por_pedido` para procesar el descuento
+        automático de materias primas de la alacena/inventario del usuario de forma atómica.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            pedido_id (UUID): ID del pedido a actualizar.
+            nuevo_estado (str): Estado de destino al que se desea mover el pedido.
+            usuario_id (UUID): ID del usuario propietario del pedido.
+
+        Returns:
+            Pedido: Instancia del Pedido con el nuevo estado aplicado.
+
+        Raises:
+            HTTPException: 400 si el estado es desconocido o si la transición de estados viola las reglas.
+        """
         pedido = await PedidoService.get_by_id(db, pedido_id, usuario_id)
         estado_actual = pedido.estado
 
