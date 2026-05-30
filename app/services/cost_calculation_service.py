@@ -1,3 +1,10 @@
+"""
+Servicio de Cálculo de Costos de Recetas.
+
+Este módulo provee el motor matemático y financiero de Kitchy para el desglose
+y cálculo de costos base de insumos, gastos indirectos (empaque y energía),
+márgenes de ganancia y el precio final de venta sugerido por porción.
+"""
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any
 from uuid import UUID
@@ -8,9 +15,21 @@ from app.services.unit_conversion_service import UnitConversionService
 
 
 class CostCalculationService:
+    """
+    Servicio que implementa las fórmulas de costeo culinario y desglose financiero de Kitchy.
+    """
+
     @staticmethod
     def _redondear(valor: Decimal) -> Decimal:
-        """Aplica redondeo financiero exacto a 2 decimales (MXN)."""
+        """
+        Aplica redondeo financiero estándar ROUND_HALF_UP a 2 decimales para divisas (MXN).
+
+        Args:
+            valor (Decimal): El monto a redondear.
+
+        Returns:
+            Decimal: El monto redondeado de forma exacta.
+        """
         return valor.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
     @staticmethod
@@ -20,7 +39,30 @@ class CostCalculationService:
             gastos_ocultos: Dict[str, GastoOculto]
     ) -> Dict[str, Any]:
         """
-        Motor de cálculo de costos y precio sugerido de Kitchy.
+        Calcula el desglose total de costos y precio de venta sugerido para una receta.
+
+        Calcula el costo de ingredientes aplicando conversiones de unidades correspondientes,
+        adiciona los gastos indirectos activos (empaque y energía), prorratea el costo por el
+        rendimiento de porciones, y aplica el margen de rentabilidad para sugerir un precio final.
+        También retorna el desglose porcentual exacto garantizando una suma de 100%.
+
+        Args:
+            receta (Receta): Instancia de la receta con sus ingredientes.
+            insumos_precios (Dict[UUID, Dict[str, Any]]): Diccionario con la información del
+                precio unitario y unidad de compra indexados por el ID de cada insumo.
+            gastos_ocultos (Dict[str, GastoOculto]): Gastos indirectos globales o específicos
+                del usuario indexados por tipo ('empaque', 'gas_luz').
+
+        Returns:
+            Dict[str, Any]: Diccionario con las claves:
+                - costo_insumos: Costo neto de ingredientes (Decimal).
+                - costo_empaque: Costo neto asignado a empaquetado (Decimal).
+                - costo_energia: Costo neto asignado a servicios de cocina (Decimal).
+                - costo_total: Sumatoria total de costos de producción (Decimal).
+                - costo_por_porcion: Costo de producción por unidad de rendimiento (Decimal).
+                - precio_sugerido: Precio sugerido aplicando el margen (Decimal).
+                - desglose_pct (dict): Porcentajes de insumos, empaque y energía (gas_luz)
+                  que representan sobre el costo total (suma garantizada de 100%).
         """
         # Costo Base: Insumos
         costo_insumos = Decimal('0.00')

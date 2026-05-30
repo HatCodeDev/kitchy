@@ -1,3 +1,9 @@
+"""
+Servicio de Gestión de Puntos de Entrega.
+
+Este módulo provee la lógica de negocio para crear, actualizar, listar y dar de baja
+lógica los puntos de entrega recurrentes configurados por los usuarios para despachar sus pedidos.
+"""
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime, timezone
@@ -11,9 +17,22 @@ from app.schemas.punto_entrega import PuntoEntregaCreate, PuntoEntregaUpdate, Pu
 
 
 class PuntoEntregaService:
+    """
+    Servicio encargado de administrar las ubicaciones y puntos de encuentro de entregas culinarias.
+    """
+
     @staticmethod
     async def list_activos(db: AsyncSession, usuario_id: UUID) -> List[PuntoEntrega]:
-        """Obtiene todos los puntos de entrega activos del usuario."""
+        """
+        Recupera el listado de todos los puntos de entrega activos de un usuario ordenados alfabéticamente.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            usuario_id (UUID): ID del usuario que consulta sus puntos de entrega.
+
+        Returns:
+            List[PuntoEntrega]: Listado de puntos de entrega activos ordenados por nombre.
+        """
         query = select(PuntoEntrega).where(
             and_(
                 PuntoEntrega.usuario_id == usuario_id,
@@ -30,10 +49,22 @@ class PuntoEntregaService:
         usuario_id: UUID,
         data: PuntoEntregaCreate
     ) -> PuntoEntrega:
-        """Crea un nuevo punto de entrega.
+        """
+        Registra un nuevo punto de entrega validando que el nombre no esté duplicado.
 
-        Valida:
-        - nombre no duplicado entre registros activos del usuario (R2)
+        Verifica que no exista un punto de entrega activo con el mismo nombre
+        para el mismo usuario antes de guardar.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            usuario_id (UUID): ID del usuario propietario.
+            data (PuntoEntregaCreate): DTO con el nombre, descripción y dirección física.
+
+        Returns:
+            PuntoEntrega: La instancia recién persistida del Punto de Entrega.
+
+        Raises:
+            HTTPException: 422 si ya existe un punto activo registrado con el mismo nombre.
         """
         # Verificar nombre único entre puntos activos del mismo usuario
         query = select(PuntoEntrega).where(
@@ -64,12 +95,19 @@ class PuntoEntregaService:
 
     @staticmethod
     async def get_or_404(db: AsyncSession, punto_entrega_id: UUID, usuario_id: UUID) -> PuntoEntrega:
-        """Obtiene un punto de entrega específico.
+        """
+        Busca un punto de entrega activo validando los permisos del usuario (Multi-tenancy).
 
-        Retorna 404 si:
-        - No existe el ID
-        - Pertenece a otro usuario
-        - Ha sido soft-deleted (activo=False)
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            punto_entrega_id (UUID): ID del punto de entrega a consultar.
+            usuario_id (UUID): ID del usuario solicitante.
+
+        Returns:
+            PuntoEntrega: La instancia del Punto de Entrega activa hallada.
+
+        Raises:
+            HTTPException: 404 si no existe, si pertenece a otro usuario o si está desactivado.
         """
         query = select(PuntoEntrega).where(
             and_(
@@ -93,7 +131,23 @@ class PuntoEntregaService:
         usuario_id: UUID,
         data: PuntoEntregaUpdate
     ) -> PuntoEntrega:
-        """Actualiza completamente un punto de entrega."""
+        """
+        Actualiza de forma completa las propiedades de un punto de entrega.
+
+        Realiza validaciones de unicidad de nombre si el nombre es modificado.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            punto_entrega_id (UUID): ID del registro a modificar.
+            usuario_id (UUID): ID del usuario propietario.
+            data (PuntoEntregaUpdate): DTO con los nuevos datos completos.
+
+        Returns:
+            PuntoEntrega: La instancia de PuntoEntrega actualizada.
+
+        Raises:
+            HTTPException: 422 si el nuevo nombre ya está ocupado por otro punto activo.
+        """
         punto = await PuntoEntregaService.get_or_404(db, punto_entrega_id, usuario_id)
 
         # Validar nombre único si cambió
@@ -131,7 +185,23 @@ class PuntoEntregaService:
         usuario_id: UUID,
         data: PuntoEntregaPatch
     ) -> PuntoEntrega:
-        """Actualiza parcialmente un punto de entrega."""
+        """
+        Actualiza parcialmente (PATCH) los atributos de un punto de entrega.
+
+        Solo actualiza los campos provistos en la petición.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            punto_entrega_id (UUID): ID del registro a actualizar.
+            usuario_id (UUID): ID del usuario propietario.
+            data (PuntoEntregaPatch): DTO con los campos opcionales a modificar.
+
+        Returns:
+            PuntoEntrega: La instancia de PuntoEntrega con los cambios parciales guardados.
+
+        Raises:
+            HTTPException: 422 si el nombre a aplicar está duplicado con otro punto activo.
+        """
         punto = await PuntoEntregaService.get_or_404(db, punto_entrega_id, usuario_id)
 
         # Validar nombre único si cambió
@@ -165,10 +235,19 @@ class PuntoEntregaService:
 
     @staticmethod
     async def soft_delete(db: AsyncSession, punto_entrega_id: UUID, usuario_id: UUID) -> PuntoEntrega:
-        """Soft-deletes un punto de entrega (activo=False).
+        """
+        Da de baja lógica (soft delete) a un punto de entrega desactivándolo.
 
-        Retorna 404 si no existe o ya fue eliminado.
-        Los nombres soft-deleted pueden reutilizarse.
+        Establece `activo=False`. Esto preserva la integridad en los pedidos
+        históricos ya entregados y permite la reutilización futura de su nombre.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            punto_entrega_id (UUID): ID del punto de entrega a desactivar.
+            usuario_id (UUID): ID del usuario propietario.
+
+        Returns:
+            PuntoEntrega: La instancia del Punto de Entrega desactivada.
         """
         punto = await PuntoEntregaService.get_or_404(db, punto_entrega_id, usuario_id)
 

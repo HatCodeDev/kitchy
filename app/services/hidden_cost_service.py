@@ -1,3 +1,10 @@
+"""
+Servicio de Gestión de Gastos Ocultos.
+
+Este módulo implementa las reglas de negocio y jerarquías de resolución para los
+gastos indirectos (gastos ocultos) en Kitchy, aplicando un flujo de fallback
+(específico de receta -> defaults de usuario -> defaults de base de datos) para empaque y energía.
+"""
 from uuid import UUID
 from decimal import Decimal
 from typing import Dict, Optional
@@ -9,15 +16,31 @@ from app.models.user import User
 
 
 class HiddenCostService:
+    """
+    Servicio para resolver, crear y actualizar los gastos ocultos de las recetas de los usuarios.
+    """
 
     @staticmethod
     async def get_gastos_para_receta(db: AsyncSession, receta_id: UUID, usuario_id: UUID) -> Dict[
         str, Optional[GastoOculto]]:
         """
-        Resuelve los gastos ocultos aplicando la regla de Fallback:
-        1. Busca configuración específica de la receta.
-        2. Si no hay configuración específica activa de receta, usa los defaults globales del usuario (de la tabla users).
-        3. Si no hay defaults del usuario, usa la configuración global del usuario de la tabla gastos_ocultos (receta_id IS NULL).
+        Resuelve los gastos ocultos aplicables a una receta aplicando la regla de jerarquía (Fallback).
+
+        La regla jerárquica de resolución sigue los siguientes pasos:
+        1. Busca si existe una configuración de GastoOculto activa y específica para la receta (`receta_id`).
+        2. Si no existe, recupera los valores de configuración por defecto globales del usuario (`User`).
+        3. Si no existen registros específicos, busca y retorna los gastos globales del usuario (`receta_id IS NULL`).
+        4. Si no hay registros de ningún tipo, instancia y retorna objetos GastoOculto temporales inicializados
+           con los valores por defecto del perfil del usuario (empaque en MXN y desgaste en %).
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            receta_id (UUID): ID de la receta para la que se consultan los gastos.
+            usuario_id (UUID): ID del usuario dueño de la receta.
+
+        Returns:
+            Dict[str, Optional[GastoOculto]]: Diccionario que contiene las instancias
+                del modelo GastoOculto para 'empaque' y 'gas_luz'.
         """
         # Obtener gastos específicos de esta receta
         query_especificos = select(GastoOculto).where(
@@ -101,7 +124,23 @@ class HiddenCostService:
             es_porcentaje: bool = False  # Default seguro por si no existe
     ) -> GastoOculto:
         """
-        Upsert (Update or Insert) de un gasto oculto para una receta específica.
+        Realiza un Upsert (Update o Insert) de la configuración de un gasto oculto.
+
+        Busca la configuración del gasto específico del tipo dado para la receta.
+        Si existe, actualiza sus campos; si no existe, crea un nuevo registro.
+        Este método hace commit de la transacción de forma inmediata.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            receta_id (UUID): ID de la receta afectada.
+            tipo (str): Tipo de gasto ('empaque' o 'gas_luz').
+            activo (bool): Estado de activación del gasto oculto.
+            usuario_id (UUID): ID del usuario que solicita la operación.
+            valor (Decimal): El valor del gasto. Por defecto 0.00.
+            es_porcentaje (bool): Si el valor representa un porcentaje del costo neto. Por defecto False.
+
+        Returns:
+            GastoOculto: La instancia creada o actualizada de GastoOculto.
         """
         query = select(GastoOculto).where(
             GastoOculto.receta_id == receta_id,
@@ -136,8 +175,16 @@ class HiddenCostService:
     @staticmethod
     def crear_gastos_default(db: AsyncSession, receta_id: UUID, usuario_id: UUID):
         """
-        Inicializa los gastos en $0 y desactivados al crear una receta nueva.
-        NOTA: No hace commit. Se delega al RecetaService para mantener la transacción ACID.
+        Inicializa los gastos ocultos por defecto al crear una receta nueva.
+
+        Crea registros de empaque (en $0 inactivo) y energía (en 0% inactivo).
+        Esta función agrega los objetos a la sesión pero **no realiza commit**,
+        delegando la transacción ACID al servicio que la invoca (generalmente RecetaService).
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            receta_id (UUID): ID de la receta recién creada.
+            usuario_id (UUID): ID del usuario creador.
         """
         gasto_empaque = GastoOculto(
             usuario_id=usuario_id,

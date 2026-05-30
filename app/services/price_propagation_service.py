@@ -1,3 +1,10 @@
+"""
+Servicio de Propagación de Precios de Insumos.
+
+Este módulo implementa la regla de negocio RN-03: cuando un insumo cambia de precio,
+se identifican de forma automática todas las recetas activas del usuario que lo utilizan
+para recalcular sus costos culinarios en cascada y disparar alertas de tipo 'margen_en_riesgo'.
+"""
 import logging
 from uuid import UUID
 from sqlalchemy import select
@@ -15,10 +22,24 @@ logger = logging.getLogger(__name__)
 
 
 class PricePropagationService:
+    """
+    Servicio encargado de propagar cambios de precios de insumos en cascada hacia las recetas.
+    """
+
     @staticmethod
     async def propagar_cambio_precio(db: AsyncSession, insumo_id: UUID, usuario_id: UUID):
         """
-        RN-03: Recalcula costos de recetas activas cuando un insumo cambia de precio.
+        Recalcula los costos de todas las recetas activas que utilizan un insumo modificado.
+
+        Identifica las recetas afectadas a través de la tabla de asociación IngredienteReceta,
+        obtiene el costo actual de todos sus componentes, corre el motor de costeo,
+        loguea la información recalculada y programa alertas de tipo 'margen_en_riesgo'
+        asociadas al insumo causante. Persiste todos los cambios de forma atómica.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            insumo_id (UUID): ID del insumo que sufrió el cambio de precio.
+            usuario_id (UUID): ID del usuario propietario de los registros.
         """
         # Buscar recetas activas del usuario que usan este insumo
         # Usamos selectinload para traer ingredientes y gastos en una sola ráfaga de red

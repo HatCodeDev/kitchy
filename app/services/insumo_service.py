@@ -1,3 +1,11 @@
+"""
+Servicio de Gestión de Insumos y Stock.
+
+Este módulo provee la lógica de negocio para la gestión del inventario de materias primas (insumos),
+incluyendo la creación, filtrado inteligente por stock crítico, actualización parcial,
+propagación automática de costos en recetas, borrado lógico con verificación de dependencias,
+y la bitácora inmutable de transacciones de stock (movimientos de inventario).
+"""
 from uuid import UUID
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
@@ -14,21 +22,24 @@ from app.schemas.insumo import InsumoCreate, InsumoUpdate
 
 
 class InsumoService:
+    """
+    Servicio que implementa la administración de insumos y bitácora de stock de Kitchy.
+    """
     @staticmethod
     async def create_insumo(db: AsyncSession, data: InsumoCreate, usuario_id: UUID) -> Insumo:
-       """
-        Registra un nuevo insumo y establece su stock inicial.
-    
-        El stock inicial se toma directamente de la cantidad declarada en la compra.
-        Esta función persiste los cambios en la base de datos (hace commit).
-    
+        """
+        Registra un nuevo insumo en el inventario y establece su stock inicial.
+
+        El stock inicial (`cantidad_actual`) se establece de forma automática igual
+        a la cantidad declarada en la compra inicial (`cantidad_comprada`).
+
         Args:
-            db: Sesión asíncrona activa para la transacción.
-            data: Payload del insumo (debe incluir 'cantidad_comprada').
-            usuario_id: Identificador del usuario que ejecuta la acción.
-    
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            data (InsumoCreate): Payload del insumo a crear con datos de compra.
+            usuario_id (UUID): ID del usuario propietario.
+
         Returns:
-            La instancia del Insumo recién creado y refrescado desde la DB.
+            Insumo: La instancia del insumo recién creado y persistido.
         """
         
         nuevo_insumo = Insumo(
@@ -47,8 +58,19 @@ class InsumoService:
     @staticmethod
     async def get_insumos(db: AsyncSession, usuario_id: UUID, activo: bool = True) -> List[Insumo]:
         """
-        Obtiene insumos con aislamiento de usuario y ordenamiento inteligente:
-        Primero los que están bajo el mínimo de alerta, luego por nombre.
+        Recupera el listado de insumos con aislamiento de usuario y ordenamiento de criticidad.
+
+        Aplica ordenamiento compuesto: primero sitúa los insumos con stock por debajo o
+        igual a su nivel de alerta mínimo configurado, y posteriormente ordena alfabéticamente
+        por nombre del insumo.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            usuario_id (UUID): ID del usuario propietario.
+            activo (bool): Flag para filtrar por registros activos o borrados lógicamente. Por defecto True.
+
+        Returns:
+            List[Insumo]: Lista de insumos ordenados de forma inteligente.
         """
         query = (
             select(Insumo)
@@ -68,7 +90,18 @@ class InsumoService:
     @staticmethod
     async def get_by_id(db: AsyncSession, insumo_id: UUID, usuario_id: UUID) -> Insumo:
         """
-        Busca un insumo y valida la propiedad (Multi-tenancy).
+        Busca un insumo específico validando la pertenencia del usuario (Multi-tenancy).
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            insumo_id (UUID): ID del insumo buscado.
+            usuario_id (UUID): ID del usuario que solicita la consulta.
+
+        Returns:
+            Insumo: La instancia de Insumo encontrada.
+
+        Raises:
+            HTTPException: 404 si no existe, o 403 si pertenece a otro usuario (Seguridad).
         """
         query = select(Insumo).where(Insumo.id == insumo_id)
         result = await db.execute(query)
@@ -89,7 +122,20 @@ class InsumoService:
     @staticmethod
     async def update_insumo(db: AsyncSession, insumo_id: UUID, data: InsumoUpdate, usuario_id: UUID) -> Insumo:
         """
-        Actualización parcial (PATCH) con validación de propiedad y propagación de precios.
+        Actualiza parcialmente (PATCH) las propiedades de un insumo.
+
+        Si se modifica el `precio_compra` o la `cantidad_comprada`, recalcula el precio
+        unitario e invoca a `PricePropagationService` de forma asíncrona para actualizar
+        al vuelo los costos de todas las recetas en las que participe este insumo.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            insumo_id (UUID): ID del insumo a actualizar.
+            data (InsumoUpdate): DTO con los cambios a aplicar.
+            usuario_id (UUID): ID del usuario solicitante.
+
+        Returns:
+            Insumo: El objeto Insumo actualizado.
         """
         # Validar que el insumo exista y pertenezca al usuario
         insumo = await InsumoService.get_by_id(db, insumo_id, usuario_id)
@@ -129,7 +175,21 @@ class InsumoService:
     @staticmethod
     async def soft_delete(db: AsyncSession, insumo_id: UUID, usuario_id: UUID) -> bool:
         """
-        Desactivación lógica del insumo.
+        Realiza la desactivación lógica (soft delete) de un insumo de inventario.
+
+        Antes de desactivar, valida que el insumo no esté referenciado por ingredientes activos
+        en recetas existentes para proteger la integridad referencial lógica del sistema.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            insumo_id (UUID): ID del insumo a desactivar.
+            usuario_id (UUID): ID del usuario propietario.
+
+        Returns:
+            bool: True si la desactivación fue exitosa.
+
+        Raises:
+            HTTPException: 400 si el insumo está siendo utilizado en alguna receta activa.
         """
         insumo = await InsumoService.get_by_id(db, insumo_id, usuario_id)
 
@@ -156,7 +216,25 @@ class InsumoService:
             usuario_id: UUID
     ) -> Insumo:
         """
-        Registra una entrada o salida de inventario, actualiza el stock y evalúa alertas.
+        Registra una transacción de stock, actualiza stock físico y dispara alertas.
+
+        Calcula el nuevo balance de stock (suma si es 'entrada', resta si es 'salida').
+        Si es salida y no hay suficiente stock físico, lanza error 400.
+        Inserta un registro inmutable en `MovimientoInsumo`.
+        Si el stock actual es igual o menor al mínimo de alerta, programa de forma inmediata
+        una `NotificacionProgramada` de tipo 'alerta_desabasto'.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            insumo_id (UUID): ID del insumo afectado.
+            data (MovimientoCreate): DTO con el tipo de movimiento, cantidad y motivo.
+            usuario_id (UUID): ID del usuario que registra la transacción.
+
+        Returns:
+            Insumo: La instancia de Insumo con stock y estado actualizados.
+
+        Raises:
+            HTTPException: 400 si hay desabasto de stock para realizar la salida.
         """
         # a. Validar pertenencia (reutilizamos la seguridad ya creada)
         insumo = await InsumoService.get_by_id(db, insumo_id, usuario_id)
@@ -209,7 +287,18 @@ class InsumoService:
     @staticmethod
     async def get_movimientos(db: AsyncSession, insumo_id: UUID, usuario_id: UUID, limit: int = 5) -> List[
         MovimientoInsumo]:
-        """Obtiene el historial de movimientos de un insumo, ordenado por los más recientes."""
+        """
+        Recupera el historial cronológico de movimientos de stock para un insumo.
+
+        Args:
+            db (AsyncSession): Conexión activa de base de datos asíncrona.
+            insumo_id (UUID): ID del insumo a auditar.
+            usuario_id (UUID): ID del usuario que solicita la auditoría.
+            limit (int): Número máximo de movimientos a retornar. Por defecto 5.
+
+        Returns:
+            List[MovimientoInsumo]: Listado de movimientos ordenados por fecha descendente.
+        """
         # Validamos que el insumo exista y sea del usuario
         await InsumoService.get_by_id(db, insumo_id, usuario_id)
 

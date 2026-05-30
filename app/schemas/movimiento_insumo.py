@@ -1,3 +1,9 @@
+"""
+Esquemas de validación Pydantic para Movimientos de Insumos.
+
+Este módulo define los esquemas utilizados exclusivamente para validar la creación
+de movimientos de stock e historiales de transacciones sobre los insumos.
+"""
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal
 from decimal import Decimal
@@ -7,40 +13,56 @@ from uuid import UUID
 
 class MovimientoCreate(BaseModel):
     """
-    Schema para la entrada de datos.
-    Validamos tipo y motivo usando Literal para que FastAPI devuelva
-    un error 422 automático si el cliente envía algo diferente.
+    Esquema de entrada para registrar una transacción de stock manual (entrada/salida).
     """
     tipo: Literal['entrada', 'salida'] = Field(
         ...,
-        description="Tipo de movimiento: entrada (suma stock) o salida (resta stock)"
+        description="Tipo de movimiento físico de inventario: 'entrada' para incrementos o 'salida' para decrementos."
     )
 
     cantidad: Decimal = Field(
         ...,
         gt=0,
-        description="Cantidad del movimiento, debe ser mayor a cero"
+        description="Cantidad neta a transaccionar. Debe ser mayor estricto a cero."
     )
 
     motivo: Literal['compra', 'uso_produccion', 'merma'] = Field(
         ...,
-        description="Motivo del movimiento para trazabilidad"
+        description="Motivo o justificación comercial del movimiento para auditorías de inventario."
     )
 
 
 class MovimientoResponse(BaseModel):
     """
-    Schema para la salida de datos.
-    Incluimos todos los campos necesarios para que el Frontend
-    pueda mostrar el historial completo.
+    Esquema de salida que representa el registro completo de una transacción de stock.
     """
-    id: UUID
-    insumo_id: UUID
-    usuario_id: UUID
-    tipo: str
-    cantidad: Decimal
-    motivo: str
-    fecha: datetime
+    id: UUID = Field(
+        ...,
+        description="Identificador único (UUID) de la transacción del movimiento."
+    )
+    insumo_id: UUID = Field(
+        ...,
+        description="Identificador único del insumo afectado."
+    )
+    usuario_id: UUID = Field(
+        ...,
+        description="UUID del usuario propietario para el aislamiento de datos multi-tenancy."
+    )
+    tipo: str = Field(
+        ...,
+        description="Tipo de movimiento registrado ('entrada' o 'salida')."
+    )
+    cantidad: Decimal = Field(
+        ...,
+        description="Cantidad física que fue alterada en el inventario."
+    )
+    motivo: str = Field(
+        ...,
+        description="Motivo registrado para justificar el movimiento."
+    )
+    fecha: datetime = Field(
+        ...,
+        description="Fecha y hora de creación de la transacción."
+    )
 
-    # Permite mapear directamente desde el modelo SQLAlchemy MovimientoInsumo
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)

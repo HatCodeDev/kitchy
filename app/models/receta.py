@@ -1,3 +1,9 @@
+"""
+Modelo de datos para la entidad Receta.
+
+Representa las recetas o fórmulas creadas por los usuarios para producir porciones
+de alimentos, definiendo el rendimiento, margen de ganancia esperado, ingredientes y pasos.
+"""
 import uuid
 from sqlalchemy import Column, String, Integer, Numeric, Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
@@ -7,6 +13,23 @@ from app.core.database import Base
 
 
 class Receta(Base):
+    """
+    Modelo ORM que representa la tabla 'recetas' en la base de datos.
+
+    Atributos:
+        id (UUID): Identificador único de la receta (Primary Key).
+        usuario_id (UUID): ID del usuario creador (Foreign Key, indexado).
+        nombre (str): Nombre distintivo de la receta.
+        porciones (int): Rendimiento de porciones obtenido con la receta. Por defecto 1.
+        margen_pct (Decimal): Porcentaje de margen de ganancia deseado (ej. 30.00% = 30%).
+        activa (bool): Flag de borrado lógico para desactivación.
+        fecha_creacion (datetime): Fecha y hora de registro de la receta.
+        fecha_modificacion (datetime): Fecha y hora de la última edición de la receta.
+        usuario (User): Relación con el modelo User (creador de la receta).
+        ingredientes (list[IngredienteReceta]): Lista de ingredientes requeridos.
+        pasos (list[PasoReceta]): Lista de pasos del proceso de preparación ordenados.
+        gastos_ocultos (list[GastoOculto]): Lista de gastos indirectos u ocultos.
+    """
     __tablename__ = "recetas"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -1,11 +1,33 @@
+"""
+Utilidad de Integración con WhatsApp.
+
+Este módulo provee funciones utilitarias para procesar números telefónicos y generar
+enlaces directos (Deep Links) que faciliten la comunicación con los clientes a través de WhatsApp.
+"""
 import re
 from typing import Optional
 
 
 def build_whatsapp_url(numero: Optional[str]) -> Optional[str]:
     """
-    Toma un número de teléfono crudo, lo limpia y construye el Deep Link de WhatsApp.
-    Si el número es inválido, retorna None silenciosamente sin romper el servidor.
+    Toma un número de teléfono crudo, lo limpia y construye el Deep Link oficial de WhatsApp.
+
+    Realiza labores de normalización de cadenas, remueve caracteres no numéricos y asume el código de
+    país de México (+52) si el número recibido consta únicamente de los 10 dígitos locales.
+
+    Args:
+        numero (Optional[str]): Cadena de caracteres que representa el número telefónico del cliente.
+                                Puede contener espacios, guiones, símbolos de suma o paréntesis.
+
+    Returns:
+        Optional[str]: URL absoluta de redirección directa a WhatsApp (`https://wa.me/...`) o
+                       `None` si el parámetro de entrada es inválido o no cumple con el patrón requerido.
+
+    Examples:
+        >>> build_whatsapp_url("55 1234-5678")
+        "https://wa.me/525512345678"
+        >>> build_whatsapp_url("+52 55 (1234) 5678")
+        "https://wa.me/525512345678"
     """
     if not numero:
         return None
@@ -26,4 +48,4 @@ def build_whatsapp_url(numero: Optional[str]) -> Optional[str]:
         return None
 
     # 5. Construir y retornar la URL final
-    return f"https://wa.me/{numero_limpio}"
+    return f"https://wa.me/{numero_limpio}"

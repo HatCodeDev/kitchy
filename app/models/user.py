@@ -1,3 +1,9 @@
+"""
+Modelo de datos para la entidad Usuario.
+
+Representa a los usuarios registrados en el sistema Kitchy,
+sus credenciales, nivel de plan y configuraciones globales predeterminadas.
+"""
 import uuid
 from sqlalchemy import Column, String, Boolean, DateTime, Numeric
 from sqlalchemy.dialects.postgresql import UUID
@@ -7,6 +13,19 @@ from app.core.database import Base
 
 
 class User(Base):
+    """
+    Modelo ORM que representa la tabla 'users' en la base de datos.
+
+    Atributos:
+        id (UUID): Identificador único de usuario (Primary Key).
+        email (str): Correo electrónico del usuario (único e indexado).
+        hashed_password (str): Hash seguro de la contraseña.
+        is_active (bool): Estado de activación de la cuenta. Por defecto True.
+        plan (str): Nivel de suscripción ('free', 'premium', etc.). Por defecto 'free'.
+        empaque_mxn_default (Decimal): Costo de empaque por defecto en MXN.
+        desgaste_pct_default (Decimal): Porcentaje de desgaste de herramientas por defecto.
+        created_at (datetime): Fecha y hora de registro de la cuenta.
+    """
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -23,6 +42,12 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def __init__(self, **kwargs):
+        """
+        Inicializa una nueva instancia de User garantizando valores por defecto limpios.
+
+        Args:
+            **kwargs: Atributos clave-valor para poblar las columnas del modelo.
+        """
         super().__init__(**kwargs)
         if self.plan is None:
             self.plan = 'free'
