@@ -174,5 +174,3 @@ Si preferís trabajar directamente sobre tu sistema operativo:
 * **Puntos de Entrega (`/api/v1/puntos-entrega`)**: Puntos físicos/virtuales para entrega de pedidos.
 
 ---
-
-¡Disfrutá desarrollando en Kitchy! 🍳 Si tenés dudas o necesitás asistencia, contactá al soporte tecnológico en `soporte@kitchy.com`.
