@@ -7,6 +7,23 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from app.core.database import Base
 from app.core.config import settings
 
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """
+    Resetea el estado en memoria del limiter de slowapi antes de cada test.
+    El limiter es un singleton compartido keyed por IP del cliente, así que sin
+    esto el contador se acumula entre tests y dispara 429 falsos.
+    """
+    from app.core.limiter import limiter
+    # Authoritative state per test: enabled + clean storage. This neutralizes any
+    # module-level mutation (e.g. a test module setting limiter.enabled = False at
+    # import time) that would otherwise leak into the whole session.
+    limiter.enabled = True
+    limiter.reset()
+    yield
+
+
 # --- MOCK FIXTURES EXISTENTES (Retrocompatibilidad) ---
 
 @pytest.fixture

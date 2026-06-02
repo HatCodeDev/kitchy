@@ -2,10 +2,10 @@ import pytest
 import jwt
 from uuid import UUID
 from app.core.config import settings
-from app.core.limiter import limiter
 
-# Desactivar slowapi de forma global en este módulo de test
-limiter.enabled = False
+# Rate limiting state is handled per-test by the autouse `reset_rate_limiter`
+# fixture in conftest.py (enabled + reset before each test). These tests make at
+# most a couple of requests each, so they stay well under the per-minute limits.
 
 @pytest.mark.asyncio
 async def test_register_success(async_client):

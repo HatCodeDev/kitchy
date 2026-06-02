@@ -1,9 +1,3 @@
-"""
-Punto de exportación centralizado de todos los modelos de datos de la aplicación.
-
-Importa cada modelo ORM de SQLAlchemy para garantizar que la metadata los detecte
-y registre de forma automática al generar migraciones con Alembic o crear las tablas.
-"""
 from app.core.database import Base
 from app.models.user import User
 from app.models.insumo import Insumo
@@ -17,3 +11,4 @@ from app.models.linea_pedido import LineaPedido
 from app.models.temporizador import Temporizador
 from app.models.notificacion_programada import NotificacionProgramada
 from app.models.punto_entrega import PuntoEntrega
+from app.models.password_reset_token import PasswordResetToken

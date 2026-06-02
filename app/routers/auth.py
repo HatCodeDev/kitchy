@@ -1,9 +1,3 @@
-"""
-Controlador de Autenticación.
-
-Este router expone los endpoints públicos de Kitchy para permitir el autoregistro
-de nuevos usuarios y el intercambio de credenciales por tokens de acceso JWT.
-"""
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from app.core.limiter import limiter
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
@@ -13,28 +7,21 @@ from sqlalchemy.future import select
 from app.core.database import get_db
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token
+from app.schemas.user import UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest
+from app.services.email.base import EmailSender
+from app.services.email.smtp import SmtpEmailSender
+from app.services.password_reset_service import password_reset_service, InvalidTokenError
+
 
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
-
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 async def register_user(request: Request, user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """
-    Registra una nueva cuenta de usuario en la plataforma Kitchy.
-
-    Valida que el correo no esté registrado previamente. Realiza el hasheo
-    seguro de la contraseña antes de persistir la entidad en PostgreSQL.
-
-    ### Rate Limiting:
-    * Máximo **10 peticiones por minuto** por dirección IP.
-
-    ### Respuestas:
-    * **201 Created**: Usuario registrado de manera exitosa. Retorna sus metadatos (excluyendo contraseña).
-    * **400 Bad Request**: Si el correo ya se encuentra en uso.
+    Registra un nuevo usuario en Kitchy.
     """
     # Verificamos si el correo ya existe en la base de datos
     query = select(User).where(User.email == user_data.email)
@@ -72,22 +59,8 @@ async def login_for_access_token(
         db: AsyncSession = Depends(get_db)
 ):
     """
-    Autentica credenciales de usuario y expide un Token de Acceso JWT (Bearer).
-
-    Realiza una verificación de hashing contra la base de datos.
-    El token resultante contiene el ID de usuario como subject (`sub`), sirviendo como
-    mecanismo base para el aislamiento multi-tenancy del backend.
-
-    ### OAuth2 Specification:
-    * El estándar requiere que el correo electrónico se envíe en el campo **`username`**
-      y la contraseña en **`password`** usando el formato `application/x-www-form-urlencoded`.
-
-    ### Rate Limiting:
-    * Máximo **10 peticiones por minuto** por dirección IP.
-
-    ### Respuestas:
-    * **200 OK**: Credenciales válidas. Devuelve el token JWT y su tipo ('bearer').
-    * **401 Unauthorized**: Correo o contraseña incorrectos.
+    Inicia sesión y devuelve un Token JWT.
+    OAuth2 espera que el correo venga en el campo 'username'.
     """
     # Buscamos al usuario por su email
     query = select(User).where(User.email == form_data.username)
@@ -108,3 +81,45 @@ async def login_for_access_token(
     access_token = create_access_token(data={"sub": str(user.id)})
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+def get_email_sender() -> EmailSender:
+    return SmtpEmailSender()
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(
+    request: Request,
+    body: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    email_sender: EmailSender = Depends(get_email_sender),
+):
+    """
+    Sends a password reset email if the address belongs to an active account.
+    Always returns 200 to prevent user enumeration.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    await password_reset_service.request_reset(db, email_sender, body.email, client_ip)
+    return {"message": "If that email is registered, you will receive a reset link shortly."}
+
+
+@router.post("/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(
+    request: Request,
+    body: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Validates the reset token and updates the user's password.
+    Returns 400 with a generic message for any token validation failure.
+    """
+    try:
+        await password_reset_service.reset_password(db, body.token, body.new_password)
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token.",
+        )
+    return {"message": "Password updated successfully."}
