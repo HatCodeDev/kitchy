@@ -2,6 +2,7 @@ services:
   api:
     build: .
     container_name: kitchy_api
+    restart: unless-stopped
     ports:
       - "3000:8000"
     volumes:
