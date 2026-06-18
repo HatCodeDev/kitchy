@@ -1,5 +1,5 @@
 # Imagen oficial de Python ligera (slim) por seguridad y rendimiento.
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Establecemos el directorio de trabajo dentro del contenedor.
 WORKDIR /app
